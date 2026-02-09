@@ -8,16 +8,17 @@ interface LayoutProps {
   setView: (view: ViewState) => void;
   isDarkMode: boolean;
   toggleTheme: () => void;
+  isAuthenticated: boolean;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, view, setView, isDarkMode, toggleTheme }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, view, setView, isDarkMode, toggleTheme, isAuthenticated }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   const navLinks: { label: string; value: ViewState }[] = [
     { label: 'Features', value: 'features' },
     { label: 'Pricing', value: 'pricing' },
     { label: 'Resources', value: 'resources' },
-  ];
+  ].filter(link => !(link.value === 'pricing' && isAuthenticated));
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-nordic-bg text-nordic-text dark:bg-nordic-darkBg dark:text-nordic-darkText transition-colors duration-300">
@@ -100,7 +101,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, view, setView, isDarkM
           <div className="flex space-x-6 mt-4 md:mt-0">
             <button onClick={() => setView('privacy')} className="hover:text-nordic-text dark:hover:text-white">Privacy Policy</button>
             <button onClick={() => setView('terms')} className="hover:text-nordic-text dark:hover:text-white">Terms of Service</button>
-            <button onClick={() => setView('resources')} className="hover:text-nordic-text dark:hover:text-white">Contact</button>
+            <button onClick={() => setView('contact')} className="hover:text-nordic-text dark:hover:text-white">Contact</button>
           </div>
         </div>
       </footer>

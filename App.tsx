@@ -8,23 +8,28 @@ import { AuthUser } from './services/authService';
 import { createCheckoutSession } from './services/billingService';
 import { supabase } from './src/supabaseClient';
 import { ToastContainer, ToastMessage, ToastType } from './components/Toast';
+
+// HER ER FIKSEN: Vi importerer sidene fra den nye filen din
+import { 
+  LandingPage, 
+  PricingPage, 
+  FeaturesPage, 
+  ResourcesPage, 
+  LegalPage,
+  ContactPage
+} from './components/StaticPages';
+
 import { 
   Upload, 
   Image as ImageIcon, 
   Settings, 
   CreditCard, 
   Download, 
-  Check, 
   Plus, 
   Trash2,
   Maximize2,
-  ShieldCheck,
-  Zap,
-  LayoutTemplate,
   X
 } from 'lucide-react';
-
-// ... (Static components remain the same, I'll include the main App changes below)
 
 export default function App() {
   // Existing State
@@ -36,7 +41,7 @@ export default function App() {
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedResolution, setSelectedResolution] = useState<'1K' | '2K' | '4K'>('1K');
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
   const [credits, setCredits] = useState(0);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   
@@ -83,8 +88,10 @@ export default function App() {
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
     }
   }, [isDarkMode]);
 
@@ -114,13 +121,47 @@ export default function App() {
     setAuthToken(session.access_token);
     setCurrentUser({ id: session.user.id, email: session.user.email });
   
-    const { data } = await supabase
+    // Fetch user profile credits
+    const { data: profileData } = await supabase
       .from('profiles')
       .select('credits')
       .eq('id', session.user.id)
       .single();
   
-    if (data) setCredits(data.credits);
+    if (profileData) setCredits(profileData.credits);
+
+    // Fetch Products
+    const { data: productsData } = await supabase
+      .from('products')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (productsData) {
+      setProducts(productsData.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        sku: p.sku || '',
+        imageUrl: p.image_url,
+        created_at: p.created_at
+      })));
+    }
+
+    // Fetch Generated Images
+    const { data: genData } = await supabase
+      .from('generated_images')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (genData) {
+      setGeneratedImages(genData.map((g: any) => ({
+        id: g.id,
+        productId: g.product_id,
+        templateId: g.template_id,
+        imageUrl: g.image_url,
+        createdAt: g.created_at,
+        resolution: g.resolution as any
+      })));
+    }
   };
 
   // Handle Post-Login Redirect Logic (Payment vs Dashboard)
@@ -163,13 +204,23 @@ export default function App() {
         });
         if (error) throw error;
         addToast("Welcome back!", "success");
+        setView('dashboard');
+        setActiveTab('upload');
       } else {
-        const { error } = await supabase.auth.signUp({
+        const { error, data } = await supabase.auth.signUp({
           email: authEmail,
           password: authPassword,
         });
         if (error) throw error;
-        addToast("Check your email to confirm your account!", "info");
+        
+        // If Supabase is configured for auto-confirm or returns a session
+        if (data?.session) {
+          addToast("Account created successfully!", "success");
+          setView('dashboard');
+          setActiveTab('upload');
+        } else {
+          addToast("Check your email to confirm your account!", "info");
+        }
       }
     } catch (err: any) {
       setAuthError(err.message);
@@ -183,47 +234,123 @@ export default function App() {
     await supabase.auth.signOut();
     setView('landing');
     setPendingPlan(null);
+    setProducts([]);
+    setGeneratedImages([]);
     addToast("Logged out successfully", "info");
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        addToast("File too large. Max 10MB.", "error");
-        return;
-      }
+    if (!file) return;
+    
+    if (file.size > 10 * 1024 * 1024) {
+      addToast("File too large. Max 10MB.", "error");
+      return;
+    }
+
+    if (!currentUser) {
+      addToast("Please log in to upload.", "error");
+      return;
+    }
+
+    try {
+      addToast("Uploading...", "info");
+      
+      // Get fresh user ID for RLS
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("User not authenticated");
+
+      // 1. Upload to Storage
+      const fileName = `${user.id}/${Date.now()}-${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from('user-uploads')
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      // 2. Get Public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('user-uploads')
+        .getPublicUrl(fileName);
+
+      // 3. Prepare local preview and base64 for API usage
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         const result = e.target?.result as string;
         const base64Data = result.split(',')[1];
-        
+
+        // 4. Insert into DB
+        const { data: productData, error: dbError } = await supabase
+          .from('products')
+          .insert({
+            user_id: user.id, // Use fresh user.id
+            name: file.name.split('.')[0],
+            sku: `SKU-${Math.floor(Math.random() * 10000)}`,
+            image_url: publicUrl
+          })
+          .select()
+          .single();
+
+        if (dbError) throw dbError;
+
+        // 5. Update State
         const newProduct: Product = {
-          id: Date.now().toString(),
-          name: file.name.split('.')[0],
-          sku: `SKU-${Math.floor(Math.random() * 1000)}`,
-          imageUrl: result,
-          base64Data: base64Data,
-          mimeType: file.type
+          id: productData.id,
+          name: productData.name,
+          sku: productData.sku,
+          imageUrl: publicUrl, 
+          base64Data: base64Data, 
+          mimeType: file.type,
+          created_at: productData.created_at
         };
+
         setProducts(prev => [newProduct, ...prev]);
         setSelectedProduct(newProduct);
         setActiveTab('generate');
-        addToast("Image uploaded!", "success");
+        addToast("Image uploaded and saved!", "success");
       };
       reader.readAsDataURL(file);
+
+    } catch (error: any) {
+      console.error(error);
+      addToast(error.message || "Upload failed", "error");
     }
   };
 
   const handleGenerate = async () => {
-    if (!selectedProduct || !selectedTemplate || !selectedProduct.base64Data) {
+    if (!selectedProduct || !selectedTemplate) {
       addToast("Please select a product and template first.", "info");
       return;
     }
 
-    if (!authToken) {
-      setView('auth' as ViewState);
-      return;
+    // Ensure we have base64 data
+    if (!selectedProduct.base64Data && selectedProduct.imageUrl) {
+        try {
+            const resp = await fetch(selectedProduct.imageUrl);
+            const blob = await resp.blob();
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                 const base64 = (reader.result as string).split(',')[1];
+                 selectedProduct.base64Data = base64;
+                 selectedProduct.mimeType = blob.type;
+                 executeGeneration();
+            }
+            reader.readAsDataURL(blob);
+            return;
+        } catch (e) {
+            addToast("Could not prepare image for generation.", "error");
+            return;
+        }
+    }
+
+    executeGeneration();
+  };
+
+  const executeGeneration = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!authToken || !user || !selectedProduct || !selectedTemplate) {
+        addToast("Authentication error. Please log in again.", "error");
+        return;
     }
 
     if (credits < 1) {
@@ -234,9 +361,9 @@ export default function App() {
 
     setIsGenerating(true);
     try {
-      const generatedBase64 = await generateImageViaApi(
+      const generatedBase64Uri = await generateImageViaApi(
         {
-          base64Image: selectedProduct.base64Data,
+          base64Image: selectedProduct.base64Data!,
           mimeType: selectedProduct.mimeType || 'image/jpeg',
           prompt: selectedTemplate.promptModifier,
           resolution: selectedResolution
@@ -244,19 +371,50 @@ export default function App() {
         authToken
       );
 
+      // Convert Data URI to Blob for Upload
+      const res = await fetch(generatedBase64Uri);
+      const blob = await res.blob();
+      
+      // Upload Generated Image
+      const fileName = `${user.id}/gen-${Date.now()}.png`;
+      const { error: uploadError } = await supabase.storage
+        .from('generated-results')
+        .upload(fileName, blob);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('generated-results')
+        .getPublicUrl(fileName);
+
+      // Insert into DB
+      const { data: genRow, error: dbError } = await supabase
+        .from('generated_images')
+        .insert({
+            user_id: user.id, // Use fresh user.id
+            product_id: selectedProduct.id,
+            template_id: selectedTemplate.id,
+            image_url: publicUrl,
+            resolution: selectedResolution
+        })
+        .select()
+        .single();
+
+      if (dbError) throw dbError;
+
       const newImage: GeneratedImage = {
-        id: Date.now().toString(),
+        id: genRow.id,
         productId: selectedProduct.id,
         templateId: selectedTemplate.id,
-        imageUrl: generatedBase64,
-        createdAt: Date.now(),
+        imageUrl: publicUrl,
+        createdAt: genRow.created_at,
         resolution: selectedResolution
       };
 
       setGeneratedImages(prev => [newImage, ...prev]);
       setCredits(prev => prev - 1); 
       setActiveTab('gallery');
-      addToast("Image generated successfully!", "success");
+      addToast("Image generated and saved!", "success");
       
     } catch (error: any) {
       addToast(error.message || 'Failed to generate image', "error");
@@ -265,14 +423,25 @@ export default function App() {
     }
   };
 
-  const handleDownload = (e: React.MouseEvent, imageUrl: string, id: string) => {
+  const handleDownload = async (e: React.MouseEvent, imageUrl: string, id: string) => {
     e.stopPropagation();
-    const link = document.createElement('a');
-    link.href = imageUrl;
-    link.download = `nordic-studio-${id}.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      addToast("Starting download...", "info");
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `nordic-studio-${id}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      addToast("Download started!", "success");
+    } catch (error) {
+      console.error("Download failed:", error);
+      addToast("Download failed. Please try again.", "error");
+    }
   };
 
   const renderDashboardContent = () => {
@@ -605,15 +774,31 @@ export default function App() {
     switch (view) {
       case 'landing':
         // Landingsside leder nå til Pricing
-        return <LandingPage onStart={() => setView('pricing')} />;
+        return (
+          <LandingPage 
+            onStart={() => setView('pricing')} 
+            onLogin={() => {
+              setAuthMode('login');
+              setView('auth');
+            }}
+          />
+        );
 
       case 'pricing':
         // Pricing leder til Auth med valgt plan
-        return <PricingPage onSelectPlan={(plan) => {
-          setPendingPlan(plan);
-          setAuthMode('register'); 
-          setView('auth' as ViewState); // Merk: Du må kanskje legge til 'auth' i types.ts
-        }} />;
+        return (
+          <PricingPage 
+            onSelectPlan={(plan) => {
+              setPendingPlan(plan);
+              setAuthMode('register'); 
+              setView('auth' as ViewState); 
+            }} 
+            onLogin={() => {
+              setAuthMode('login');
+              setView('auth' as ViewState);
+            }}
+          />
+        );
 
       case 'auth' as ViewState: 
         return (
@@ -689,12 +874,19 @@ export default function App() {
       case 'resources': return <ResourcesPage />;
       case 'privacy': return <LegalPage title="Privacy Policy" />;
       case 'terms': return <LegalPage title="Terms of Service" />;
+      case 'contact': return <ContactPage />;
       default: return null;
     }
   };
 
   return (
-    <Layout view={view} setView={setView} isDarkMode={isDarkMode} toggleTheme={toggleTheme}>
+    <Layout 
+      view={view} 
+      setView={setView} 
+      isDarkMode={isDarkMode} 
+      toggleTheme={toggleTheme}
+      isAuthenticated={!!currentUser}
+    >
       {renderCurrentView()}
       
       <ToastContainer toasts={toasts} removeToast={removeToast} />

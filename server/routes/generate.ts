@@ -29,20 +29,27 @@ router.post('/', authMiddleware, async (req: AuthedRequest, res) => {
       return res.status(403).json({ error: 'Insufficient credits. Please top up.' });
     }
 
-    // 2. Generate Image with Imagen 3
+    // 2. Generate Image with Imagen 4 (Subject-driven)
     console.log("Generating image for user:", userId);
     
     let imageUrl = '';
     
     try {
-      // Using the unified SDK's generateImages method
+      // Using the unified SDK client structure that was working previously
+      // Refined prompt for product preservation
+      const enhancedPrompt = `Product photography. Use the provided reference image as the primary subject. Keep the product exactly as it looks in the reference. Place it in: ${prompt}. Professional studio lighting, 4k.`;
+
       const response = await ai.models.generateImages({
-        model: 'imagen-3.0-generate-001',
-        prompt: prompt,
+        model: 'imagen-4.0-generate-001',
+        prompt: enhancedPrompt,
+        // Correct parameter for reference image in this SDK version is often 'image' with 'imageBytes'
+        image: base64Image ? {
+          imageBytes: base64Image, 
+        } : undefined,
         config: {
           numberOfImages: 1,
           aspectRatio: '1:1',
-          safetyFilterLevel: 'BLOCK_MEDIUM_AND_ABOVE',
+          safetyFilterLevel: 'BLOCK_LOW_AND_ABOVE',
           personGeneration: 'ALLOW_ADULT', 
         }
       });
@@ -62,7 +69,7 @@ router.post('/', authMiddleware, async (req: AuthedRequest, res) => {
       imageUrl = `data:image/png;base64,${base64Content}`;
 
     } catch (aiError: any) {
-      console.error("AI Generation Error:", aiError);
+      console.error("AI Generation Error:", aiError.message);
       return res.status(500).json({ error: `Generation failed: ${aiError.message}` });
     }
 
