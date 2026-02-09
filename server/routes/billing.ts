@@ -1,32 +1,26 @@
-import { Router, raw } from 'express';
+import { Router, raw, json } from 'express';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { authMiddleware, AuthedRequest } from '../util/auth';
 
 const router = Router();
-
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-if (!STRIPE_SECRET_KEY) {
-  console.warn('Warning: STRIPE_SECRET_KEY not set. /api/billing routes will be disabled.');
-}
-
-const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2023-10-16' as any }) : null;
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2023-10-16' as any });
 
 // Admin-tilgang til databasen (for å kunne legge til kreditter)
 const supabaseAdmin = createClient(
-  process.env.SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// 1. Start kjøp (Checkout)
-router.post('/checkout', authMiddleware, async (req: AuthedRequest, res) => {
+// 1. Start kjøp (Checkout) - Trenger JSON parsing
+router.post('/checkout', json(), authMiddleware, async (req: AuthedRequest, res) => {
   try {
-    if (!stripe) {
-      return res.status(500).json({ error: 'Stripe not configured.' });
-    }
-
-    const { quantity } = req.body;
+    const { quantity = 10 } = req.body || {};
     const userId = req.user!.userId;
+
+    if (!quantity || quantity < 1) {
+      return res.status(400).json({ error: 'Quantity must be at least 1' });
+    }
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -55,19 +49,11 @@ router.post('/checkout', authMiddleware, async (req: AuthedRequest, res) => {
 
 // 2. Webhook: Stripe ringer denne når betalingen er OK
 router.post('/webhook', raw({ type: 'application/json' }), async (req, res) => {
-  if (!stripe) {
-    return res.status(500).json({ error: 'Stripe not configured.' });
-  }
-
   const sig = req.headers['stripe-signature'];
   let event;
 
   try {
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-    if (!webhookSecret) {
-      return res.status(500).json({ error: 'Webhook secret not configured.' });
-    }
-    event = stripe.webhooks.constructEvent(req.body, sig!, webhookSecret);
+    event = stripe.webhooks.constructEvent(req.body, sig!, process.env.STRIPE_WEBHOOK_SECRET!);
   } catch (err: any) {
     console.error('Webhook Error:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);

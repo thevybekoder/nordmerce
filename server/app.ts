@@ -1,35 +1,31 @@
-import express, { json, urlencoded } from 'express';
+import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import morgan from 'morgan';
 import { generateRouter } from './routes/generate';
-import { authRouter } from './routes/auth';
 import { billingRouter } from './routes/billing';
 
 dotenv.config();
 
 const app = express();
+const PORT = process.env.PORT || 4000;
 
-app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:3000', credentials: true }));
-app.use(json({ limit: '10mb' }));
-app.use(urlencoded({ extended: true }));
-app.use(morgan('dev'));
+app.use(cors());
 
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok' });
-});
-
-app.use('/api/auth', authRouter);
-app.use('/api/generate', generateRouter);
+// VIKTIG: Billing MÅ komme før json-parseren, fordi Stripe trenger "rå" data
 app.use('/api/billing', billingRouter);
 
-const port = process.env.PORT || 4000;
+// HER ER ENDRINGEN: Vi tillater nå opptil 50mb (nok til store bilder)
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-app.listen(port, () => {
-  // eslint-disable-next-line no-console
-  console.log(`API server listening on http://localhost:${port}`);
+// Routes
+app.use('/api/generate', generateRouter);
+
+// Health check
+app.get('/', (req, res) => {
+  res.send('Nordic Studio API is running 🚀');
 });
 
-export default app;
-
-
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
