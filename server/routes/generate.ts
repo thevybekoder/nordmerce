@@ -1,12 +1,11 @@
 import { Router, json } from 'express';
-import { GoogleGenAI } from '@google/genai'; // Pass på at du har nyeste versjon: npm install @google/genai
+import { GoogleGenAI } from '@google/genai'; 
 import { createClient } from '@supabase/supabase-js';
 import { authMiddleware, AuthedRequest } from '../util/auth';
 
 const router = Router();
-router.use(json({ limit: '10mb' }));
 
-// Vi bruker din eksisterende API nøkkel
+// Initialize AI with the correct package exports
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const supabaseAdmin = createClient(
@@ -16,10 +15,10 @@ const supabaseAdmin = createClient(
 
 router.post('/', authMiddleware, async (req: AuthedRequest, res) => {
   const userId = req.user!.userId;
-  const { prompt } = req.body; // Vi bruker kun prompt for generering nå
+  const { prompt, base64Image, mimeType } = req.body;
 
   try {
-    // 1. Sjekk saldo (Credits)
+    // 1. Check Credit Balance
     const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('credits')
@@ -27,19 +26,18 @@ router.post('/', authMiddleware, async (req: AuthedRequest, res) => {
       .single();
 
     if (!profile || profile.credits < 1) {
-      return res.status(403).json({ error: 'Tomt for kreditter.' });
+      return res.status(403).json({ error: 'Insufficient credits. Please top up.' });
     }
 
-    // 2. Generer bilde med Imagen 3 (via Google GenAI SDK)
-    console.log("Genererer bilde med prompt:", prompt);
+    // 2. Generate Image with Imagen 3
+    console.log("Generating image for user:", userId);
     
     let imageUrl = '';
     
     try {
-      // Kall mot Google sin nye Imagen 3 modell
-      // Merk: Du må ha aktivert Vertex AI API i Google Cloud Console for prosjektet ditt
+      // Using the unified SDK's generateImages method
       const response = await ai.models.generateImages({
-        model: 'imagen-3.0-generate-001', // Eller 'gemini-2.0-flash-exp' hvis du har tilgang til det
+        model: 'imagen-3.0-generate-001',
         prompt: prompt,
         config: {
           numberOfImages: 1,
@@ -49,30 +47,40 @@ router.post('/', authMiddleware, async (req: AuthedRequest, res) => {
         }
       });
 
-      // Hent ut bildet (Base64)
-      const generatedImage = response.generatedImages?.[0]?.image?.imageBytes;
+      // Handle the response bytes correctly
+      const generatedImageBytes = response.generatedImages?.[0]?.image?.imageBytes;
       
-      if (!generatedImage) throw new Error("Ingen bilde-data mottatt fra Google.");
+      if (!generatedImageBytes) {
+        throw new Error("No image data received from the AI service.");
+      }
       
-      // Konverter til en data-URL som frontend kan vise direkte
-      imageUrl = `data:image/png;base64,${generatedImage}`;
+      // If bytes are returned as a Buffer or Uint8Array, convert to base64
+      const base64Content = typeof generatedImageBytes === 'string' 
+        ? generatedImageBytes 
+        : Buffer.from(generatedImageBytes).toString('base64');
+
+      imageUrl = `data:image/png;base64,${base64Content}`;
 
     } catch (aiError: any) {
-      console.error("AI Error:", aiError);
-      // Fallback hvis API-kall feiler (så appen ikke kræsjer)
-      // return res.status(500).json({ error: "Kunne ikke generere bilde: " + aiError.message });
-      // Eller bruk mock-bilde midlertidig:
-       imageUrl = `https://images.unsplash.com/photo-1620641788421-7f1c33850486?w=800&auto=format&fit=crop`;
+      console.error("AI Generation Error:", aiError);
+      return res.status(500).json({ error: `Generation failed: ${aiError.message}` });
     }
 
-    // 3. Trekk kreditt
-    await supabaseAdmin.rpc('increment_credits', { user_id: userId, amount: -1 });
+    // 3. Deduct Credit
+    const { error: rpcError } = await supabaseAdmin.rpc('increment_credits', { 
+      user_id: userId, 
+      amount: -1 
+    });
+    
+    if (rpcError) {
+      console.error("Failed to deduct credit after generation:", rpcError);
+    }
 
     res.json({ imageUrl });
 
   } catch (error: any) {
     console.error('Server error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error.message || 'Internal server error' });
   }
 });
 

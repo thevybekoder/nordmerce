@@ -4,9 +4,10 @@ import { Button } from './components/Button';
 import { ViewState, DashboardTab, Product, GeneratedImage, Template } from './types';
 import { TEMPLATES } from './constants';
 import { generateImageViaApi } from './services/geminiService';
-import { AuthUser } from './services/authService'; // Fjernet ubrukte imports
+import { AuthUser } from './services/authService'; 
 import { createCheckoutSession } from './services/billingService';
 import { supabase } from './src/supabaseClient';
+import { ToastContainer, ToastMessage, ToastType } from './components/Toast';
 import { 
   Upload, 
   Image as ImageIcon, 
@@ -23,210 +24,10 @@ import {
   X
 } from 'lucide-react';
 
-// --- Static Page Components ---
-
-const FeaturesPage: React.FC = () => (
-  <div className="max-w-7xl mx-auto px-4 py-20">
-    <div className="text-center mb-16">
-      <h1 className="text-4xl font-bold mb-4">Enterprise-grade Features</h1>
-      <p className="text-xl text-nordic-muted dark:text-nordic-darkMuted">Everything you need to scale your content production.</p>
-    </div>
-    <div className="grid md:grid-cols-3 gap-10">
-      <div className="p-8 bg-white dark:bg-nordic-darkSurface rounded-2xl shadow-card border border-nordic-border dark:border-nordic-darkBorder">
-        <div className="w-12 h-12 bg-nordic-accent/10 rounded-lg flex items-center justify-center mb-6 text-nordic-accent">
-          <Zap className="w-6 h-6" />
-        </div>
-        <h3 className="text-xl font-semibold mb-3">Instant Rendering</h3>
-        <p className="text-nordic-muted dark:text-nordic-darkMuted">Generate 4K assets in under 30 seconds using our proprietary Gemini 3 pipeline.</p>
-      </div>
-      <div className="p-8 bg-white dark:bg-nordic-darkSurface rounded-2xl shadow-card border border-nordic-border dark:border-nordic-darkBorder">
-        <div className="w-12 h-12 bg-nordic-accent/10 rounded-lg flex items-center justify-center mb-6 text-nordic-accent">
-          <LayoutTemplate className="w-6 h-6" />
-        </div>
-        <h3 className="text-xl font-semibold mb-3">Smart Templates</h3>
-        <p className="text-nordic-muted dark:text-nordic-darkMuted">Context-aware templates that adjust lighting and perspective to match your product perfectly.</p>
-      </div>
-      <div className="p-8 bg-white dark:bg-nordic-darkSurface rounded-2xl shadow-card border border-nordic-border dark:border-nordic-darkBorder">
-        <div className="w-12 h-12 bg-nordic-accent/10 rounded-lg flex items-center justify-center mb-6 text-nordic-accent">
-          <ShieldCheck className="w-6 h-6" />
-        </div>
-        <h3 className="text-xl font-semibold mb-3">Brand Safety</h3>
-        <p className="text-nordic-muted dark:text-nordic-darkMuted">Enterprise data isolation. Your uploads and generations are private and never train public models.</p>
-      </div>
-    </div>
-  </div>
-);
-
-interface PricingProps {
-  onSelectPlan: (plan: 'starter' | 'pro') => void;
-}
-
-const PricingPage: React.FC<PricingProps> = ({ onSelectPlan }) => (
-  <div className="max-w-7xl mx-auto px-4 py-20">
-    <div className="text-center mb-16">
-      <h1 className="text-4xl font-bold mb-4">Choose your plan</h1>
-      <p className="text-xl text-nordic-muted dark:text-nordic-darkMuted">Simple transparent pricing</p>
-    </div>
-    <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-      
-      {/* Starter Plan */}
-      <div className="p-8 rounded-2xl border border-nordic-border bg-white dark:bg-nordic-darkSurface flex flex-col">
-        <h3 className="text-2xl font-semibold mb-2">Starter</h3>
-        <div className="text-4xl font-bold mb-6">Gratis <span className="text-base font-normal text-nordic-muted">/start</span></div>
-        <ul className="space-y-4 mb-8 flex-grow">
-          <li className="flex items-center"><Check className="w-4 h-4 mr-2" /> 5 Free Credits</li>
-          <li className="flex items-center"><Check className="w-4 h-4 mr-2" /> Pay as you go later</li>
-        </ul>
-        <Button variant="outline" className="w-full" onClick={() => onSelectPlan('starter')}>
-          Select Starter
-        </Button>
-      </div>
-
-      {/* Pro Plan */}
-      <div className="p-8 rounded-2xl border border-nordic-accent bg-nordic-accent/5 dark:bg-nordic-accent/10 flex flex-col relative">
-        <div className="absolute top-0 right-0 bg-nordic-accent text-white text-xs px-3 py-1 rounded-bl-lg rounded-tr-lg">POPULAR</div>
-        <h3 className="text-2xl font-semibold mb-2">Pro</h3>
-        <div className="text-4xl font-bold mb-6">199 kr <span className="text-base font-normal text-nordic-muted">/mo</span></div>
-        <ul className="space-y-4 mb-8 flex-grow">
-          <li className="flex items-center"><Check className="w-4 h-4 mr-2 text-nordic-accent" /> Monthly Subscription</li>
-          <li className="flex items-center"><Check className="w-4 h-4 mr-2 text-nordic-accent" /> 500 Credits / mo</li>
-          <li className="flex items-center"><Check className="w-4 h-4 mr-2 text-nordic-accent" /> Priority Generation</li>
-        </ul>
-        <Button variant="primary" className="w-full" onClick={() => onSelectPlan('pro')}>
-          Select Pro
-        </Button>
-      </div>
-
-    </div>
-  </div>
-);
-
-const ResourcesPage: React.FC = () => (
-  <div className="max-w-3xl mx-auto px-4 py-20">
-    <h1 className="text-3xl font-bold mb-8">Resources</h1>
-    <div className="space-y-8">
-      <div className="bg-white dark:bg-nordic-darkSurface p-6 rounded-xl border border-nordic-border dark:border-nordic-darkBorder">
-        <h3 className="text-xl font-semibold mb-2">Getting Started Guide</h3>
-        <p className="text-nordic-muted dark:text-nordic-darkMuted mb-4">Learn the basics of product photography automation.</p>
-        <a href="#" className="text-nordic-accent font-medium hover:underline">Read Article →</a>
-      </div>
-      <div className="bg-white dark:bg-nordic-darkSurface p-6 rounded-xl border border-nordic-border dark:border-nordic-darkBorder">
-        <h3 className="text-xl font-semibold mb-2">Prompt Engineering 101</h3>
-        <p className="text-nordic-muted dark:text-nordic-darkMuted mb-4">How to describe your product for the best results.</p>
-        <a href="#" className="text-nordic-accent font-medium hover:underline">Read Article →</a>
-      </div>
-    </div>
-  </div>
-);
-
-const LegalPage: React.FC<{ title: string }> = ({ title }) => (
-  <div className="max-w-3xl mx-auto px-4 py-20">
-    <h1 className="text-3xl font-bold mb-8">{title}</h1>
-    <div className="prose dark:prose-invert">
-      <p className="text-nordic-muted dark:text-nordic-darkMuted">
-        Last updated: February 2024
-      </p>
-      <br/>
-      <p>
-        Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
-      </p>
-    </div>
-  </div>
-);
-
-const BeforeAfterCard: React.FC<{ beforeSrc: string; afterSrc: string; label: string }> = ({ beforeSrc, afterSrc, label }) => {
-  return (
-    <div className="flex flex-col space-y-3">
-      <div className="grid grid-cols-2 gap-2 bg-white dark:bg-nordic-darkSurface p-2 rounded-xl shadow-soft">
-        <div className="relative aspect-square rounded-lg overflow-hidden bg-nordic-clay dark:bg-nordic-darkClay">
-          <img src={beforeSrc} alt="Before" className="w-full h-full object-cover" />
-          <div className="absolute top-2 left-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded font-medium">Input</div>
-        </div>
-        <div className="relative aspect-square rounded-lg overflow-hidden bg-nordic-clay dark:bg-nordic-darkClay">
-          <img src={afterSrc} alt="After" className="w-full h-full object-cover" />
-          <div className="absolute top-2 left-2 bg-nordic-accent text-white text-[10px] px-2 py-0.5 rounded font-medium">Generated</div>
-        </div>
-      </div>
-      <div className="text-center">
-        <p className="font-medium text-nordic-text dark:text-white">{label}</p>
-      </div>
-    </div>
-  );
-};
-
-const LandingPage: React.FC<{ onStart: () => void }> = ({ onStart }) => (
-  <div className="flex flex-col">
-    <section className="py-20 md:py-32 px-4 max-w-7xl mx-auto text-center">
-      <h1 className="text-4xl md:text-6xl font-semibold tracking-tight text-nordic-text dark:text-white mb-6">
-        Professional product images.<br />
-        <span className="text-nordic-muted dark:text-nordic-darkMuted">No photoshoot required.</span>
-      </h1>
-      <p className="text-xl text-nordic-muted dark:text-nordic-darkMuted max-w-2xl mx-auto mb-10 font-light">
-        Generate consistent, high-fidelity marketing assets from a single photo. 
-      </p>
-      <div className="flex flex-col sm:flex-row items-center justify-center">
-        <Button size="lg" onClick={onStart}>Start Generating</Button>
-      </div>
-    </section>
-
-    <section className="bg-white dark:bg-nordic-darkSurface py-20 border-y border-nordic-border dark:border-nordic-darkBorder">
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-semibold mb-4">Transform your catalog</h2>
-          <p className="text-nordic-muted dark:text-nordic-darkMuted">See the difference professional AI generation makes.</p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-           <BeforeAfterCard 
-             beforeSrc="https://images.unsplash.com/photo-1578916171728-46686eac8d58?q=80&w=400&auto=format&fit=crop"
-             afterSrc="https://images.unsplash.com/photo-1595341888016-a392ef81b7de?q=80&w=400&auto=format&fit=crop"
-             label="Studio Minimal"
-           />
-           <BeforeAfterCard 
-             beforeSrc="https://images.unsplash.com/photo-1560343090-f0409e92791a?q=80&w=400&auto=format&fit=crop"
-             afterSrc="https://images.unsplash.com/photo-1543163521-1bf539c55dd2?q=80&w=400&auto=format&fit=crop"
-             label="Lifestyle Outdoor"
-           />
-           <BeforeAfterCard 
-             beforeSrc="https://images.unsplash.com/photo-1559056199-641a0ac8b55e?q=80&w=400&auto=format&fit=crop"
-             afterSrc="https://images.unsplash.com/photo-1550989460-0adf9ea622e2?q=80&w=400&auto=format&fit=crop"
-             label="Dark Mode Luxury"
-           />
-        </div>
-      </div>
-    </section>
-
-    <section className="py-20 max-w-7xl mx-auto px-4">
-      <div className="grid md:grid-cols-3 gap-12 text-center">
-        <div>
-          <div className="w-12 h-12 bg-nordic-clay dark:bg-nordic-darkClay rounded-full flex items-center justify-center mx-auto mb-4">
-            <Upload className="w-6 h-6 text-nordic-accent dark:text-white" />
-          </div>
-          <h3 className="font-semibold text-lg mb-2">1. Upload Product</h3>
-          <p className="text-nordic-muted dark:text-nordic-darkMuted">Drag and drop your raw product shots.</p>
-        </div>
-        <div>
-          <div className="w-12 h-12 bg-nordic-clay dark:bg-nordic-darkClay rounded-full flex items-center justify-center mx-auto mb-4">
-            <ImageIcon className="w-6 h-6 text-nordic-accent dark:text-white" />
-          </div>
-          <h3 className="font-semibold text-lg mb-2">2. Choose Template</h3>
-          <p className="text-nordic-muted dark:text-nordic-darkMuted">Select from our curated library.</p>
-        </div>
-        <div>
-          <div className="w-12 h-12 bg-nordic-clay dark:bg-nordic-darkClay rounded-full flex items-center justify-center mx-auto mb-4">
-            <Download className="w-6 h-6 text-nordic-accent dark:text-white" />
-          </div>
-          <h3 className="font-semibold text-lg mb-2">3. Export 4K</h3>
-          <p className="text-nordic-muted dark:text-nordic-darkMuted">Get print-ready 4K assets in seconds.</p>
-        </div>
-      </div>
-    </section>
-  </div>
-);
-
-// --- Main App Component ---
+// ... (Static components remain the same, I'll include the main App changes below)
 
 export default function App() {
-  // State
+  // Existing State
   const [view, setView] = useState<ViewState>('landing');
   const [activeTab, setActiveTab] = useState<DashboardTab>('upload');
   const [products, setProducts] = useState<Product[]>([]);
@@ -239,6 +40,18 @@ export default function App() {
   const [credits, setCredits] = useState(0);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   
+  // Toast State
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const addToast = (message: string, type: ToastType = 'info') => {
+    const id = Date.now().toString();
+    setToasts(prev => [...prev, { id, message, type }]);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
+
   // Auth State
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
@@ -250,6 +63,19 @@ export default function App() {
   
   // New State for Flow
   const [pendingPlan, setPendingPlan] = useState<'starter' | 'pro' | null>(null);
+
+  // Handle Stripe Redirection Feedback
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('success')) {
+      addToast("Payment successful! Credits added.", "success");
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (params.get('canceled')) {
+      addToast("Payment canceled.", "info");
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -336,16 +162,18 @@ export default function App() {
           password: authPassword,
         });
         if (error) throw error;
+        addToast("Welcome back!", "success");
       } else {
         const { error } = await supabase.auth.signUp({
           email: authEmail,
           password: authPassword,
         });
         if (error) throw error;
-        alert("Sjekk e-posten din for å bekrefte kontoen!");
+        addToast("Check your email to confirm your account!", "info");
       }
     } catch (err: any) {
       setAuthError(err.message);
+      addToast(err.message, "error");
     } finally {
       setIsAuthLoading(false);
     }
@@ -355,11 +183,16 @@ export default function App() {
     await supabase.auth.signOut();
     setView('landing');
     setPendingPlan(null);
+    addToast("Logged out successfully", "info");
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        addToast("File too large. Max 10MB.", "error");
+        return;
+      }
       const reader = new FileReader();
       reader.onload = (e) => {
         const result = e.target?.result as string;
@@ -376,21 +209,25 @@ export default function App() {
         setProducts(prev => [newProduct, ...prev]);
         setSelectedProduct(newProduct);
         setActiveTab('generate');
+        addToast("Image uploaded!", "success");
       };
       reader.readAsDataURL(file);
     }
   };
 
   const handleGenerate = async () => {
-    if (!selectedProduct || !selectedTemplate || !selectedProduct.base64Data) return;
+    if (!selectedProduct || !selectedTemplate || !selectedProduct.base64Data) {
+      addToast("Please select a product and template first.", "info");
+      return;
+    }
 
     if (!authToken) {
-      setView('landing');
+      setView('auth' as ViewState);
       return;
     }
 
     if (credits < 1) {
-      alert("Insufficient credits. Please top up in Settings.");
+      addToast("Insufficient credits. Please top up in Settings.", "error");
       setActiveTab('settings');
       return;
     }
@@ -417,11 +254,12 @@ export default function App() {
       };
 
       setGeneratedImages(prev => [newImage, ...prev]);
-      setCredits(prev => prev - 1); // Deduct credit
+      setCredits(prev => prev - 1); 
       setActiveTab('gallery');
+      addToast("Image generated successfully!", "success");
       
-    } catch (error) {
-      alert((error as any).message || 'Failed to generate image');
+    } catch (error: any) {
+      addToast(error.message || 'Failed to generate image', "error");
     } finally {
       setIsGenerating(false);
     }
@@ -859,6 +697,8 @@ export default function App() {
     <Layout view={view} setView={setView} isDarkMode={isDarkMode} toggleTheme={toggleTheme}>
       {renderCurrentView()}
       
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+
       {/* Fullscreen Overlay */}
       {fullscreenImage && (
         <div 
