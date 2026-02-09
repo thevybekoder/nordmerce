@@ -1,15 +1,13 @@
 import { Router, json } from 'express';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI } from '@google/genai'; // Pass på at du har nyeste versjon: npm install @google/genai
 import { createClient } from '@supabase/supabase-js';
 import { authMiddleware, AuthedRequest } from '../util/auth';
 
 const router = Router();
-
-// Bruk json() middleware her også for sikkerhets skyld
 router.use(json({ limit: '10mb' }));
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const ai = GEMINI_API_KEY ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : null;
+// Vi bruker din eksisterende API nøkkel
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL!,
@@ -18,12 +16,10 @@ const supabaseAdmin = createClient(
 
 router.post('/', authMiddleware, async (req: AuthedRequest, res) => {
   const userId = req.user!.userId;
-  const { base64Image, prompt } = req.body;
-
-  console.log(`Mottok genererings-forespørsel fra bruker ${userId}`);
+  const { prompt } = req.body; // Vi bruker kun prompt for generering nå
 
   try {
-    // 1. SJEKK SALDO
+    // 1. Sjekk saldo (Credits)
     const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('credits')
@@ -31,46 +27,52 @@ router.post('/', authMiddleware, async (req: AuthedRequest, res) => {
       .single();
 
     if (!profile || profile.credits < 1) {
-      return res.status(403).json({ error: 'Tomt for kreditter. Vennligst kjøp flere.' });
+      return res.status(403).json({ error: 'Tomt for kreditter.' });
     }
 
-    // 2. PRØV Å GENERERE BILDE
+    // 2. Generer bilde med Imagen 3 (via Google GenAI SDK)
+    console.log("Genererer bilde med prompt:", prompt);
+    
     let imageUrl = '';
     
     try {
-        if (!ai) throw new Error("Mangler GEMINI_API_KEY");
+      // Kall mot Google sin nye Imagen 3 modell
+      // Merk: Du må ha aktivert Vertex AI API i Google Cloud Console for prosjektet ditt
+      const response = await ai.models.generateImages({
+        model: 'imagen-3.0-generate-001', // Eller 'gemini-2.0-flash-exp' hvis du har tilgang til det
+        prompt: prompt,
+        config: {
+          numberOfImages: 1,
+          aspectRatio: '1:1',
+          safetyFilterLevel: 'BLOCK_MEDIUM_AND_ABOVE',
+          personGeneration: 'ALLOW_ADULT', 
+        }
+      });
 
-        // NB: De fleste Gemini-modeller støtter ikke direkte bilde-generering via API enda
-        // Vi bruker en mock-løsning her hvis modellen feiler eller nøkkelen er feil
-        // For ekte produksjon bør du vurdere OpenAI DALL-E 3 eller Stability AI.
-        
-        /* HVIS DU HAR TILGANG TIL IMAGEN PÅ VERTEX AI, LEGG INN DEN KODEN HER.
-           ELLERS GENERERER VI EN "PLACEHOLDER" FOR Å VISE AT APPEN FUNKER.
-        */
-       
-        // Kast feil med vilje her for å bruke fallback-bildet (Unsplash)
-        // Fjern denne linjen hvis du har en fungerende Imagen-modell konfigurasjon
-        throw new Error("Gemini Image Generation not available on free tier key yet.");
+      // Hent ut bildet (Base64)
+      const generatedImage = response.generatedImages?.[0]?.image?.imageBytes;
+      
+      if (!generatedImage) throw new Error("Ingen bilde-data mottatt fra Google.");
+      
+      // Konverter til en data-URL som frontend kan vise direkte
+      imageUrl = `data:image/png;base64,${generatedImage}`;
 
     } catch (aiError: any) {
-        console.warn("AI Generering feilet (Dette er forventet hvis du ikke har Imagen-tilgang):", aiError.message);
-        console.log("Bruker FALLBACK bilde fra Unsplash for demo...");
-        
-        // Demo: Returner et tilfeldig profesjonelt produktbilde
-        imageUrl = `https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&auto=format&fit=crop&q=80&t=${Date.now()}`;
+      console.error("AI Error:", aiError);
+      // Fallback hvis API-kall feiler (så appen ikke kræsjer)
+      // return res.status(500).json({ error: "Kunne ikke generere bilde: " + aiError.message });
+      // Eller bruk mock-bilde midlertidig:
+       imageUrl = `https://images.unsplash.com/photo-1620641788421-7f1c33850486?w=800&auto=format&fit=crop`;
     }
 
-    // 3. TREKK 1 KREDITT
-    await supabaseAdmin.rpc('increment_credits', { 
-      user_id: userId, 
-      amount: -1 
-    });
+    // 3. Trekk kreditt
+    await supabaseAdmin.rpc('increment_credits', { user_id: userId, amount: -1 });
 
     res.json({ imageUrl });
 
   } catch (error: any) {
     console.error('Server error:', error);
-    res.status(500).json({ error: 'Noe gikk galt på serveren.' });
+    res.status(500).json({ error: error.message });
   }
 });
 

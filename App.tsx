@@ -4,7 +4,7 @@ import { Button } from './components/Button';
 import { ViewState, DashboardTab, Product, GeneratedImage, Template } from './types';
 import { TEMPLATES } from './constants';
 import { generateImageViaApi } from './services/geminiService';
-import { login, register, AuthUser } from './services/authService';
+import { AuthUser } from './services/authService'; // Fjernet ubrukte imports
 import { createCheckoutSession } from './services/billingService';
 import { supabase } from './src/supabaseClient';
 import { 
@@ -17,7 +17,6 @@ import {
   Plus, 
   Trash2,
   Maximize2,
-  ArrowRight,
   ShieldCheck,
   Zap,
   LayoutTemplate,
@@ -58,25 +57,46 @@ const FeaturesPage: React.FC = () => (
   </div>
 );
 
-const PricingPage: React.FC = () => (
+interface PricingProps {
+  onSelectPlan: (plan: 'starter' | 'pro') => void;
+}
+
+const PricingPage: React.FC<PricingProps> = ({ onSelectPlan }) => (
   <div className="max-w-7xl mx-auto px-4 py-20">
     <div className="text-center mb-16">
-      <h1 className="text-4xl font-bold mb-4">Simple, Transparent Pricing</h1>
-      <p className="text-xl text-nordic-muted dark:text-nordic-darkMuted">Start for free, scale as you grow.</p>
+      <h1 className="text-4xl font-bold mb-4">Choose your plan</h1>
+      <p className="text-xl text-nordic-muted dark:text-nordic-darkMuted">Simple transparent pricing</p>
     </div>
-    <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-      {['Starter', 'Pro', 'Enterprise'].map((tier, idx) => (
-        <div key={tier} className={`p-8 rounded-2xl border ${idx === 1 ? 'border-nordic-accent bg-nordic-accent/5 dark:bg-nordic-accent/10' : 'border-nordic-border dark:border-nordic-darkBorder bg-white dark:bg-nordic-darkSurface'} flex flex-col`}>
-          <h3 className="text-2xl font-semibold mb-2">{tier}</h3>
-          <div className="text-4xl font-bold mb-6">{idx === 0 ? '$0' : idx === 1 ? '$49' : 'Custom'} <span className="text-base font-normal text-nordic-muted dark:text-nordic-darkMuted">/mo</span></div>
-          <ul className="space-y-4 mb-8 flex-grow">
-            <li className="flex items-center"><Check className="w-4 h-4 mr-2 text-nordic-accent" /> {idx === 0 ? '5' : idx === 1 ? '500' : 'Unlimited'} Generations</li>
-            <li className="flex items-center"><Check className="w-4 h-4 mr-2 text-nordic-accent" /> {idx === 0 ? '1K' : '4K'} Resolution</li>
-            <li className="flex items-center"><Check className="w-4 h-4 mr-2 text-nordic-accent" /> {idx === 0 ? 'Community Support' : 'Priority Support'}</li>
-          </ul>
-          <Button variant={idx === 1 ? 'primary' : 'outline'} className="w-full">Choose {tier}</Button>
-        </div>
-      ))}
+    <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+      
+      {/* Starter Plan */}
+      <div className="p-8 rounded-2xl border border-nordic-border bg-white dark:bg-nordic-darkSurface flex flex-col">
+        <h3 className="text-2xl font-semibold mb-2">Starter</h3>
+        <div className="text-4xl font-bold mb-6">Gratis <span className="text-base font-normal text-nordic-muted">/start</span></div>
+        <ul className="space-y-4 mb-8 flex-grow">
+          <li className="flex items-center"><Check className="w-4 h-4 mr-2" /> 5 Free Credits</li>
+          <li className="flex items-center"><Check className="w-4 h-4 mr-2" /> Pay as you go later</li>
+        </ul>
+        <Button variant="outline" className="w-full" onClick={() => onSelectPlan('starter')}>
+          Select Starter
+        </Button>
+      </div>
+
+      {/* Pro Plan */}
+      <div className="p-8 rounded-2xl border border-nordic-accent bg-nordic-accent/5 dark:bg-nordic-accent/10 flex flex-col relative">
+        <div className="absolute top-0 right-0 bg-nordic-accent text-white text-xs px-3 py-1 rounded-bl-lg rounded-tr-lg">POPULAR</div>
+        <h3 className="text-2xl font-semibold mb-2">Pro</h3>
+        <div className="text-4xl font-bold mb-6">199 kr <span className="text-base font-normal text-nordic-muted">/mo</span></div>
+        <ul className="space-y-4 mb-8 flex-grow">
+          <li className="flex items-center"><Check className="w-4 h-4 mr-2 text-nordic-accent" /> Monthly Subscription</li>
+          <li className="flex items-center"><Check className="w-4 h-4 mr-2 text-nordic-accent" /> 500 Credits / mo</li>
+          <li className="flex items-center"><Check className="w-4 h-4 mr-2 text-nordic-accent" /> Priority Generation</li>
+        </ul>
+        <Button variant="primary" className="w-full" onClick={() => onSelectPlan('pro')}>
+          Select Pro
+        </Button>
+      </div>
+
     </div>
   </div>
 );
@@ -110,21 +130,9 @@ const LegalPage: React.FC<{ title: string }> = ({ title }) => (
       <p>
         Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
       </p>
-      <br/>
-      <h3 className="text-xl font-semibold">1. Data Collection</h3>
-      <p>
-        Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-      </p>
-      <br/>
-      <h3 className="text-xl font-semibold">2. User Rights</h3>
-      <p>
-        Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam.
-      </p>
     </div>
   </div>
 );
-
-// --- Helper Components ---
 
 const BeforeAfterCard: React.FC<{ beforeSrc: string; afterSrc: string; label: string }> = ({ beforeSrc, afterSrc, label }) => {
   return (
@@ -146,11 +154,8 @@ const BeforeAfterCard: React.FC<{ beforeSrc: string; afterSrc: string; label: st
   );
 };
 
-// --- Landing Page ---
-
 const LandingPage: React.FC<{ onStart: () => void }> = ({ onStart }) => (
   <div className="flex flex-col">
-    {/* Hero */}
     <section className="py-20 md:py-32 px-4 max-w-7xl mx-auto text-center">
       <h1 className="text-4xl md:text-6xl font-semibold tracking-tight text-nordic-text dark:text-white mb-6">
         Professional product images.<br />
@@ -158,15 +163,12 @@ const LandingPage: React.FC<{ onStart: () => void }> = ({ onStart }) => (
       </h1>
       <p className="text-xl text-nordic-muted dark:text-nordic-darkMuted max-w-2xl mx-auto mb-10 font-light">
         Generate consistent, high-fidelity marketing assets from a single photo. 
-        Designed for modern e-commerce teams.
       </p>
-      <div className="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-4">
-        <Button size="lg" onClick={onStart}>Start Free Trial</Button>
-        <Button size="lg" variant="outline" onClick={onStart}>View Demo Gallery</Button>
+      <div className="flex flex-col sm:flex-row items-center justify-center">
+        <Button size="lg" onClick={onStart}>Start Generating</Button>
       </div>
     </section>
 
-    {/* Proof Section - Before/After */}
     <section className="bg-white dark:bg-nordic-darkSurface py-20 border-y border-nordic-border dark:border-nordic-darkBorder">
       <div className="max-w-7xl mx-auto px-4">
         <div className="text-center mb-12">
@@ -174,11 +176,6 @@ const LandingPage: React.FC<{ onStart: () => void }> = ({ onStart }) => (
           <p className="text-nordic-muted dark:text-nordic-darkMuted">See the difference professional AI generation makes.</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-           {/* 
-              REPLACE THESE URLS WITH YOUR OWN IMAGES 
-              "beforeSrc" should be the raw product photo.
-              "afterSrc" should be the final result.
-           */}
            <BeforeAfterCard 
              beforeSrc="https://images.unsplash.com/photo-1578916171728-46686eac8d58?q=80&w=400&auto=format&fit=crop"
              afterSrc="https://images.unsplash.com/photo-1595341888016-a392ef81b7de?q=80&w=400&auto=format&fit=crop"
@@ -198,7 +195,6 @@ const LandingPage: React.FC<{ onStart: () => void }> = ({ onStart }) => (
       </div>
     </section>
 
-    {/* Simple Features */}
     <section className="py-20 max-w-7xl mx-auto px-4">
       <div className="grid md:grid-cols-3 gap-12 text-center">
         <div>
@@ -206,21 +202,21 @@ const LandingPage: React.FC<{ onStart: () => void }> = ({ onStart }) => (
             <Upload className="w-6 h-6 text-nordic-accent dark:text-white" />
           </div>
           <h3 className="font-semibold text-lg mb-2">1. Upload Product</h3>
-          <p className="text-nordic-muted dark:text-nordic-darkMuted">Drag and drop your raw product shots. We handle the background removal and optimization.</p>
+          <p className="text-nordic-muted dark:text-nordic-darkMuted">Drag and drop your raw product shots.</p>
         </div>
         <div>
           <div className="w-12 h-12 bg-nordic-clay dark:bg-nordic-darkClay rounded-full flex items-center justify-center mx-auto mb-4">
             <ImageIcon className="w-6 h-6 text-nordic-accent dark:text-white" />
           </div>
           <h3 className="font-semibold text-lg mb-2">2. Choose Template</h3>
-          <p className="text-nordic-muted dark:text-nordic-darkMuted">Select from our curated library of high-conversion e-commerce scenes.</p>
+          <p className="text-nordic-muted dark:text-nordic-darkMuted">Select from our curated library.</p>
         </div>
         <div>
           <div className="w-12 h-12 bg-nordic-clay dark:bg-nordic-darkClay rounded-full flex items-center justify-center mx-auto mb-4">
             <Download className="w-6 h-6 text-nordic-accent dark:text-white" />
           </div>
           <h3 className="font-semibold text-lg mb-2">3. Export 4K</h3>
-          <p className="text-nordic-muted dark:text-nordic-darkMuted">Get print-ready 4K assets in seconds. Sync directly to your storefront.</p>
+          <p className="text-nordic-muted dark:text-nordic-darkMuted">Get print-ready 4K assets in seconds.</p>
         </div>
       </div>
     </section>
@@ -230,6 +226,7 @@ const LandingPage: React.FC<{ onStart: () => void }> = ({ onStart }) => (
 // --- Main App Component ---
 
 export default function App() {
+  // State
   const [view, setView] = useState<ViewState>('landing');
   const [activeTab, setActiveTab] = useState<DashboardTab>('upload');
   const [products, setProducts] = useState<Product[]>([]);
@@ -241,6 +238,8 @@ export default function App() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [credits, setCredits] = useState(0);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
+  
+  // Auth State
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -248,6 +247,9 @@ export default function App() {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
+  
+  // New State for Flow
+  const [pendingPlan, setPendingPlan] = useState<'starter' | 'pro' | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -261,6 +263,99 @@ export default function App() {
   }, [isDarkMode]);
 
   const toggleTheme = () => setIsDarkMode(!isDarkMode);
+
+  // Auth Session Listener
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) handleSession(session);
+    });
+  
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        handleSession(session);
+      } else {
+        setCurrentUser(null);
+        setAuthToken(null);
+        setCredits(0);
+      }
+    });
+  
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Handle Session Logic
+  const handleSession = async (session: any) => {
+    setAuthToken(session.access_token);
+    setCurrentUser({ id: session.user.id, email: session.user.email });
+  
+    const { data } = await supabase
+      .from('profiles')
+      .select('credits')
+      .eq('id', session.user.id)
+      .single();
+  
+    if (data) setCredits(data.credits);
+  };
+
+  // Handle Post-Login Redirect Logic (Payment vs Dashboard)
+  useEffect(() => {
+    if (currentUser && pendingPlan === 'pro') {
+      // User logged in and wanted Pro -> Send to Stripe
+      handleSubscribe();
+      setPendingPlan(null); // Clear pending so we don't loop
+    }
+  }, [currentUser, pendingPlan]);
+
+  // Handle Subscription (Stripe)
+  const handleSubscribe = async () => {
+    if (!authToken) return;
+    try {
+      const res = await fetch(`${(import.meta as any).env.VITE_API_BASE_URL || 'http://localhost:4000'}/api/billing/subscribe`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+      const data = await res.json();
+      if (data.url) window.location.href = data.url;
+    } catch (err) {
+      alert("Kunne ikke starte abonnement.");
+    }
+  };
+
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    setIsAuthLoading(true);
+  
+    try {
+      if (authMode === 'login') {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: authEmail,
+          password: authPassword,
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.auth.signUp({
+          email: authEmail,
+          password: authPassword,
+        });
+        if (error) throw error;
+        alert("Sjekk e-posten din for å bekrefte kontoen!");
+      }
+    } catch (err: any) {
+      setAuthError(err.message);
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setView('landing');
+    setPendingPlan(null);
+  };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -284,83 +379,6 @@ export default function App() {
       };
       reader.readAsDataURL(file);
     }
-  };
-
-  // ... inne i App() funksjonen ...
-  
-  // Bytt ut de gamle state-variablene for auth med disse hvis de ikke allerede er der
-  const [authLoading, setAuthLoading] = useState(false);
-  
-  // 1. Lytt til om brukeren logger inn eller ut (Automatisk)
-  useEffect(() => {
-    // Sjekk status med en gang appen starter
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) handleSession(session);
-    });
-  
-    // Lytt etter endringer (f.eks. hvis man logger ut i en annen fane)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        handleSession(session);
-      } else {
-        setCurrentUser(null);
-        setAuthToken(null);
-        setCredits(0);
-      }
-    });
-  
-    return () => subscription.unsubscribe();
-  }, []);
-  
-  // Hjelpefunksjon for å hente profilen når vi har en session
-  const handleSession = async (session: any) => {
-    setAuthToken(session.access_token);
-    setCurrentUser({ id: session.user.id, email: session.user.email });
-  
-    // Hent kreditter fra databasen vi lagde i Steg 1
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('credits')
-      .eq('id', session.user.id)
-      .single();
-  
-    if (data) setCredits(data.credits);
-  };
-  
-  // 2. Den nye Login/Registrerings funksjonen
-  const handleAuthSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError(null);
-    setAuthLoading(true);
-  
-    try {
-      if (authMode === 'login') {
-        // LOGG INN
-        const { error } = await supabase.auth.signInWithPassword({
-          email: authEmail,
-          password: authPassword,
-        });
-        if (error) throw error;
-      } else {
-        // REGISTRER NY (Triggeren i databasen vil nå gi 5 credits automatisk!)
-        const { error } = await supabase.auth.signUp({
-          email: authEmail,
-          password: authPassword,
-        });
-        if (error) throw error;
-        alert("Sjekk e-posten din for å bekrefte kontoen!");
-      }
-      // Hvis suksess, vil useEffect ovenfor fange det opp automatisk
-    } catch (err: any) {
-      setAuthError(err.message);
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-  
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setView('landing');
   };
 
   const handleGenerate = async () => {
@@ -538,7 +556,6 @@ export default function App() {
                     onClick={() => setSelectedTemplate(template)}
                   >
                     <div className="aspect-[4/3] bg-gray-200 dark:bg-nordic-darkClay relative">
-                      {/* Using the updated thumbnail that looks like a result */}
                       <img src={template.thumbnail} className="w-full h-full object-cover" alt={template.title} />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60"></div>
                       <span className="absolute bottom-2 right-2 bg-black/50 text-white text-[10px] px-2 py-1 rounded backdrop-blur-md">Preview</span>
@@ -672,17 +689,102 @@ export default function App() {
     }
   };
 
-  const renderMainContent = () => {
+  // --- Main View Switcher ---
+
+  const renderCurrentView = () => {
+    // 1. Hvis brukeren er logget inn
+    if (currentUser) {
+      // Sjekk om brukeren kom fra Pricing og valgte Pro
+      if (pendingPlan === 'pro') {
+         // Vis en loading tekst mens vi omdirigerer i useEffect
+         return (
+          <div className="flex items-center justify-center min-h-screen">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-nordic-accent mx-auto mb-4"></div>
+              <p className="text-xl">Redirecting to secure payment...</p>
+            </div>
+          </div>
+         );
+      }
+      
+      // Ellers vis vanlig dashboard
+      if (view === 'dashboard' || view === 'landing') return (
+        <div className="flex flex-col md:flex-row h-[calc(100vh-64px)] overflow-hidden">
+            {/* Dashboard Sidebar */}
+            <aside className="w-full md:w-64 bg-white dark:bg-nordic-darkSurface border-r border-nordic-border dark:border-nordic-darkBorder flex-shrink-0 z-10 md:h-full overflow-y-auto">
+              <div className="p-6">
+                <nav className="space-y-2">
+                  <button 
+                    onClick={() => setActiveTab('upload')}
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'upload' ? 'bg-nordic-bg dark:bg-nordic-darkClay text-nordic-accent dark:text-white' : 'text-nordic-muted dark:text-nordic-darkMuted hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                  >
+                    <Upload className="w-5 h-5" />
+                    <span>Uploads</span>
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('generate')}
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'generate' ? 'bg-nordic-bg dark:bg-nordic-darkClay text-nordic-accent dark:text-white' : 'text-nordic-muted dark:text-nordic-darkMuted hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                  >
+                    <ImageIcon className="w-5 h-5" />
+                    <span>Generate</span>
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('gallery')}
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'gallery' ? 'bg-nordic-bg dark:bg-nordic-darkClay text-nordic-accent dark:text-white' : 'text-nordic-muted dark:text-nordic-darkMuted hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                  >
+                    <Download className="w-5 h-5" />
+                    <span>Gallery</span>
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('settings')}
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'settings' ? 'bg-nordic-bg dark:bg-nordic-darkClay text-nordic-accent dark:text-white' : 'text-nordic-muted dark:text-nordic-darkMuted hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                  >
+                    <Settings className="w-5 h-5" />
+                    <span>Settings</span>
+                  </button>
+                </nav>
+
+                <div className="mt-12 p-4 bg-nordic-bg dark:bg-nordic-darkClay rounded-lg border border-nordic-border dark:border-nordic-darkBorder">
+                  <p className="text-xs font-semibold text-nordic-text dark:text-white mb-2">CREDIT BALANCE</p>
+                  <div className="flex items-baseline space-x-1 mb-3">
+                    <span className="text-2xl font-bold text-nordic-accent dark:text-white">{credits}</span>
+                    <span className="text-xs text-nordic-muted dark:text-nordic-darkMuted">remaining</span>
+                  </div>
+                  <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => { setActiveTab('settings'); }}>Get More</Button>
+                </div>
+              </div>
+            </aside>
+
+            {/* Dashboard Content */}
+            <section className="flex-grow overflow-y-auto bg-nordic-bg dark:bg-nordic-darkBg scroll-smooth">
+               {renderDashboardContent()}
+            </section>
+          </div>
+      );
+    }
+
+    // 2. Hvis brukeren IKKE er logget inn
     switch (view) {
       case 'landing':
-        return currentUser ? (
-          <LandingPage onStart={() => setView('dashboard')} />
-        ) : (
+        // Landingsside leder nå til Pricing
+        return <LandingPage onStart={() => setView('pricing')} />;
+
+      case 'pricing':
+        // Pricing leder til Auth med valgt plan
+        return <PricingPage onSelectPlan={(plan) => {
+          setPendingPlan(plan);
+          setAuthMode('register'); 
+          setView('auth' as ViewState); // Merk: Du må kanskje legge til 'auth' i types.ts
+        }} />;
+
+      case 'auth' as ViewState: 
+        return (
           <div className="max-w-md mx-auto py-16 px-4">
-            <h1 className="text-3xl font-bold mb-6">Welcome to Nordic Studio</h1>
-            <p className="text-nordic-muted dark:text-nordic-darkMuted mb-6">
-              Create an account or log in to start generating product images.
-            </p>
+            <h1 className="text-3xl font-bold mb-6">
+              {pendingPlan ? `Finish setup for ${pendingPlan}` : 'Welcome Back'}
+            </h1>
+            <p className="text-nordic-muted mb-6">Create an account to continue.</p>
+            
             <form
               onSubmit={handleAuthSubmit}
               className="space-y-4 bg-white dark:bg-nordic-darkSurface p-6 rounded-xl border border-nordic-border dark:border-nordic-darkBorder"
@@ -739,77 +841,23 @@ export default function App() {
                 className="w-full mt-2"
                 isLoading={isAuthLoading}
               >
-                {authMode === 'login' ? 'Log in' : 'Create account'}
+                {authMode === 'login' ? 'Log in' : 'Create account & Continue'}
               </Button>
             </form>
           </div>
         );
+
       case 'features': return <FeaturesPage />;
-      case 'pricing': return <PricingPage />;
       case 'resources': return <ResourcesPage />;
       case 'privacy': return <LegalPage title="Privacy Policy" />;
       case 'terms': return <LegalPage title="Terms of Service" />;
-      case 'dashboard':
-        return (
-          <div className="flex flex-col md:flex-row h-[calc(100vh-64px)] overflow-hidden">
-            {/* Dashboard Sidebar */}
-            <aside className="w-full md:w-64 bg-white dark:bg-nordic-darkSurface border-r border-nordic-border dark:border-nordic-darkBorder flex-shrink-0 z-10 md:h-full overflow-y-auto">
-              <div className="p-6">
-                <nav className="space-y-2">
-                  <button 
-                    onClick={() => setActiveTab('upload')}
-                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'upload' ? 'bg-nordic-bg dark:bg-nordic-darkClay text-nordic-accent dark:text-white' : 'text-nordic-muted dark:text-nordic-darkMuted hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-                  >
-                    <Upload className="w-5 h-5" />
-                    <span>Uploads</span>
-                  </button>
-                  <button 
-                    onClick={() => setActiveTab('generate')}
-                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'generate' ? 'bg-nordic-bg dark:bg-nordic-darkClay text-nordic-accent dark:text-white' : 'text-nordic-muted dark:text-nordic-darkMuted hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-                  >
-                    <ImageIcon className="w-5 h-5" />
-                    <span>Generate</span>
-                  </button>
-                  <button 
-                    onClick={() => setActiveTab('gallery')}
-                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'gallery' ? 'bg-nordic-bg dark:bg-nordic-darkClay text-nordic-accent dark:text-white' : 'text-nordic-muted dark:text-nordic-darkMuted hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-                  >
-                    <Download className="w-5 h-5" />
-                    <span>Gallery</span>
-                  </button>
-                  <button 
-                    onClick={() => setActiveTab('settings')}
-                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'settings' ? 'bg-nordic-bg dark:bg-nordic-darkClay text-nordic-accent dark:text-white' : 'text-nordic-muted dark:text-nordic-darkMuted hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-                  >
-                    <Settings className="w-5 h-5" />
-                    <span>Settings</span>
-                  </button>
-                </nav>
-
-                <div className="mt-12 p-4 bg-nordic-bg dark:bg-nordic-darkClay rounded-lg border border-nordic-border dark:border-nordic-darkBorder">
-                  <p className="text-xs font-semibold text-nordic-text dark:text-white mb-2">CREDIT BALANCE</p>
-                  <div className="flex items-baseline space-x-1 mb-3">
-                    <span className="text-2xl font-bold text-nordic-accent dark:text-white">{credits}</span>
-                    <span className="text-xs text-nordic-muted dark:text-nordic-darkMuted">remaining</span>
-                  </div>
-                  <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => { setActiveTab('settings'); }}>Get More</Button>
-                </div>
-              </div>
-            </aside>
-
-            {/* Dashboard Content */}
-            <section className="flex-grow overflow-y-auto bg-nordic-bg dark:bg-nordic-darkBg scroll-smooth">
-               {renderDashboardContent()}
-            </section>
-          </div>
-        );
       default: return null;
     }
   };
 
   return (
     <Layout view={view} setView={setView} isDarkMode={isDarkMode} toggleTheme={toggleTheme}>
-      {renderMainContent()}
+      {renderCurrentView()}
       
       {/* Fullscreen Overlay */}
       {fullscreenImage && (
