@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { GoogleGenAI } from '@google/genai';
-import { authMiddleware } from '../util/auth';
+import { createClient } from '@supabase/supabase-js';
+import { authMiddleware, AuthedRequest } from '../util/auth';
 
 const router = Router();
 
@@ -12,12 +13,19 @@ if (!GEMINI_API_KEY) {
 
 const ai = GEMINI_API_KEY ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : null;
 
-router.post('/', authMiddleware, async (req, res) => {
+// Admin client for å sjekke/trekke saldo
+const supabaseAdmin = createClient(
+  process.env.SUPABASE_URL || '',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+);
+
+router.post('/', authMiddleware, async (req: AuthedRequest, res) => {
   try {
     if (!ai) {
-      return res.status(500).json({ error: 'Gemini API key not configured on server.' });
+      return res.status(500).json({ error: 'Gemini API not configured.' });
     }
 
+    const userId = req.user!.userId;
     const { base64Image, mimeType, prompt, resolution } = req.body as {
       base64Image?: string;
       mimeType?: string;
@@ -26,9 +34,21 @@ router.post('/', authMiddleware, async (req, res) => {
     };
 
     if (!base64Image || !mimeType || !prompt) {
-      return res.status(400).json({ error: 'Missing base64Image, mimeType or prompt.' });
+      return res.status(400).json({ error: 'Missing required fields: base64Image, mimeType, prompt' });
     }
 
+    // 1. SJEKK SALDO
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('credits')
+      .eq('id', userId)
+      .single();
+
+    if (!profile || profile.credits < 1) {
+      return res.status(403).json({ error: 'Tomt for kreditter. Vennligst kjøp flere.' });
+    }
+
+    // 2. GENERER BILDE
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-image-preview',
       contents: {
@@ -57,6 +77,13 @@ router.post('/', authMiddleware, async (req, res) => {
       for (const part of parts) {
         if (part.inlineData && part.inlineData.data) {
           const url = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
+          
+          // 3. TREKK 1 KREDITT ETTER SUKSESS
+          await supabaseAdmin.rpc('increment_credits', { 
+            user_id: userId, 
+            amount: -1 
+          });
+          
           return res.json({ imageUrl: url });
         }
       }

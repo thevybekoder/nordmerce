@@ -1,35 +1,37 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-prod';
+dotenv.config();
 
-export interface AuthPayload {
-  userId: string;
-  email: string;
-}
+// En enkel Supabase klient for å verifisere tokens
+const supabase = createClient(
+  process.env.SUPABASE_URL || '',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+);
 
 export interface AuthedRequest extends Request {
-  user?: AuthPayload;
+  user?: {
+    userId: string;
+    email?: string;
+  };
 }
 
-export function signToken(payload: AuthPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
-}
-
-export function authMiddleware(req: AuthedRequest, res: Response, next: NextFunction) {
+export async function authMiddleware(req: AuthedRequest, res: Response, next: NextFunction) {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Missing or invalid Authorization header.' });
+    return res.status(401).json({ error: 'Mangler token.' });
   }
 
   const token = header.substring('Bearer '.length);
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as AuthPayload;
-    req.user = decoded;
-    next();
-  } catch {
-    return res.status(401).json({ error: 'Invalid or expired token.' });
+  
+  // Spør Supabase: "Er denne brukeren ekte?"
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+
+  if (error || !user) {
+    return res.status(401).json({ error: 'Ugyldig token.' });
   }
+
+  req.user = { userId: user.id, email: user.email };
+  next();
 }
-
-

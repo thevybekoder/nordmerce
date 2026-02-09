@@ -6,6 +6,7 @@ import { TEMPLATES } from './constants';
 import { generateImageViaApi } from './services/geminiService';
 import { login, register, AuthUser } from './services/authService';
 import { createCheckoutSession } from './services/billingService';
+import { supabase } from './src/supabaseClient';
 import { 
   Upload, 
   Image as ImageIcon, 
@@ -285,27 +286,80 @@ export default function App() {
     }
   };
 
+  // ... inne i App() funksjonen ...
+  
+  // Bytt ut de gamle state-variablene for auth med disse hvis de ikke allerede er der
+  const [authLoading, setAuthLoading] = useState(false);
+  
+  // 1. Lytt til om brukeren logger inn eller ut (Automatisk)
+  useEffect(() => {
+    // Sjekk status med en gang appen starter
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) handleSession(session);
+    });
+  
+    // Lytt etter endringer (f.eks. hvis man logger ut i en annen fane)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        handleSession(session);
+      } else {
+        setCurrentUser(null);
+        setAuthToken(null);
+        setCredits(0);
+      }
+    });
+  
+    return () => subscription.unsubscribe();
+  }, []);
+  
+  // Hjelpefunksjon for å hente profilen når vi har en session
+  const handleSession = async (session: any) => {
+    setAuthToken(session.access_token);
+    setCurrentUser({ id: session.user.id, email: session.user.email });
+  
+    // Hent kreditter fra databasen vi lagde i Steg 1
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('credits')
+      .eq('id', session.user.id)
+      .single();
+  
+    if (data) setCredits(data.credits);
+  };
+  
+  // 2. Den nye Login/Registrerings funksjonen
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
-    setIsAuthLoading(true);
+    setAuthLoading(true);
+  
     try {
-      const fn = authMode === 'login' ? login : register;
-      const res = await fn(authEmail, authPassword);
-      setAuthToken(res.token);
-      setCurrentUser(res.user);
-      setView('dashboard');
+      if (authMode === 'login') {
+        // LOGG INN
+        const { error } = await supabase.auth.signInWithPassword({
+          email: authEmail,
+          password: authPassword,
+        });
+        if (error) throw error;
+      } else {
+        // REGISTRER NY (Triggeren i databasen vil nå gi 5 credits automatisk!)
+        const { error } = await supabase.auth.signUp({
+          email: authEmail,
+          password: authPassword,
+        });
+        if (error) throw error;
+        alert("Sjekk e-posten din for å bekrefte kontoen!");
+      }
+      // Hvis suksess, vil useEffect ovenfor fange det opp automatisk
     } catch (err: any) {
-      setAuthError(err.message || 'Authentication failed');
+      setAuthError(err.message);
     } finally {
-      setIsAuthLoading(false);
+      setAuthLoading(false);
     }
   };
-
-  const handleLogout = () => {
-    setAuthToken(null);
-    setCurrentUser(null);
-    setCredits(0);
+  
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     setView('landing');
   };
 
