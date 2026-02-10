@@ -1,33 +1,117 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import { Button } from './Button';
-import { Check, Zap, LayoutTemplate, ShieldCheck } from 'lucide-react';
+import { Check, Zap, LayoutTemplate, ShieldCheck, MoveHorizontal } from 'lucide-react';
+
+const SHOWCASE_IMAGES = [
+  {
+    id: 1,
+    before: '/images/bottle_before.JPG',
+    after: '/images/bottle_after.png',
+    label: 'Studio Minimal'
+  },
+  {
+    id: 2,
+    before: '/images/lamp_before.JPG',
+    after: '/images/lamp_after.png',
+    label: 'Warm Interior'
+  },
+  {
+    id: 3,
+    before: '/images/headphones_before.JPG',
+    after: '/images/headphones_after.png',
+    label: 'Lifestyle Dark'
+  }
+];
+
+const BeforeAfterSlider = ({ before, after, label }: { before: string, after: string, label: string }) => {
+  const [sliderPosition, setSliderPosition] = useState(50);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleMove = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
+    if (!containerRef.current) return;
+    const { left, width } = containerRef.current.getBoundingClientRect();
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const pos = ((clientX - left) / width) * 100;
+    setSliderPosition(Math.min(100, Math.max(0, pos)));
+  };
+
+  return (
+    <div className="group relative w-full aspect-[4/5] md:aspect-square rounded-2xl overflow-hidden cursor-ew-resize shadow-card hover:shadow-lg transition-shadow border border-nordic-border dark:border-nordic-darkBorder select-none touch-none"
+         ref={containerRef}
+         onMouseMove={handleMove}
+         onTouchMove={handleMove}
+    >
+      {/* Background (Before Image) - Always visible as base */}
+      <img src={before} alt="Before" className="absolute inset-0 w-full h-full object-cover" draggable={false} />
+      <span className="absolute top-4 left-4 bg-black/60 text-white text-xs font-bold px-2 py-1 rounded shadow-sm z-10 pointer-events-none">Before</span>
+
+      {/* Foreground (After Image) - Revealed by slider */}
+      <div className="absolute inset-0 w-full h-full overflow-hidden" style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }}>
+        <img src={after} alt="After" className="absolute inset-0 w-full h-full object-cover" draggable={false} />
+        <span className="absolute top-4 right-4 bg-nordic-accent text-white text-xs font-bold px-2 py-1 rounded shadow-sm pointer-events-none">After</span>
+      </div>
+
+      {/* Slider Handle Line */}
+      <div className="absolute inset-y-0 w-0.5 bg-white/80 z-20 pointer-events-none" style={{ left: `${sliderPosition}%` }}>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-white rounded-full shadow-md flex items-center justify-center text-nordic-accent border border-gray-200">
+          <MoveHorizontal className="w-4 h-4" />
+        </div>
+      </div>
+      
+      <div className="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black/60 to-transparent pointer-events-none">
+        <p className="text-white font-medium text-center">{label}</p>
+      </div>
+    </div>
+  );
+};
 
 // --- Landing Page ---
 export const LandingPage = ({ onStart, onLogin }: { onStart: () => void; onLogin: () => void }) => (
-  <div className="relative flex flex-col items-center justify-center min-h-[80vh] text-center px-4 animate-in fade-in duration-700">
-    <div className="absolute top-0 right-0 p-4">
-      <Button variant="ghost" onClick={onLogin}>Log in</Button>
+  <div className="flex flex-col">
+    {/* Hero Section */}
+    <div className="relative flex flex-col items-center justify-center min-h-[80vh] text-center px-4 animate-in fade-in duration-700">
+      <div className="absolute top-0 right-0 p-4">
+        <Button variant="ghost" onClick={onLogin}>Log in</Button>
+      </div>
+      <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-nordic-accent to-emerald-600 bg-clip-text text-transparent tracking-tight">
+        Nordic Studio
+      </h1>
+      <p className="text-xl text-nordic-muted dark:text-nordic-darkMuted max-w-2xl mb-10 leading-relaxed">
+        Lag produktbilder i studiokvalitet med kunstig intelligens. 
+        Skreddersydd for ren, nordisk estetikk.
+      </p>
+      <div className="flex gap-4">
+          <Button size="lg" onClick={onStart} className="shadow-lg shadow-nordic-accent/20">
+          Kom i gang gratis
+          </Button>
+      </div>
+      
+      {/* Social Proof */}
+      <div className="mt-20 opacity-50 grayscale flex gap-8">
+          <div className="h-8 w-24 bg-gray-300 dark:bg-gray-700 rounded"></div>
+          <div className="h-8 w-24 bg-gray-300 dark:bg-gray-700 rounded"></div>
+          <div className="h-8 w-24 bg-gray-300 dark:bg-gray-700 rounded"></div>
+      </div>
     </div>
-    <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-nordic-accent to-emerald-600 bg-clip-text text-transparent tracking-tight">
-      Nordic Studio
-    </h1>
-    <p className="text-xl text-nordic-muted dark:text-nordic-darkMuted max-w-2xl mb-10 leading-relaxed">
-      Lag produktbilder i studiokvalitet med kunstig intelligens. 
-      Skreddersydd for ren, nordisk estetikk.
-    </p>
-    <div className="flex gap-4">
-        <Button size="lg" onClick={onStart} className="shadow-lg shadow-nordic-accent/20">
-        Kom i gang gratis
-        </Button>
-    </div>
-    
-    {/* Social Proof / Trust Badges kan legges her */}
-    <div className="mt-20 opacity-50 grayscale flex gap-8">
-        {/* Placeholder logoer */}
-        <div className="h-8 w-24 bg-gray-300 dark:bg-gray-700 rounded"></div>
-        <div className="h-8 w-24 bg-gray-300 dark:bg-gray-700 rounded"></div>
-        <div className="h-8 w-24 bg-gray-300 dark:bg-gray-700 rounded"></div>
-    </div>
+
+    {/* Showcase Section */}
+    <section className="py-24 bg-white dark:bg-nordic-darkSurface border-y border-nordic-border dark:border-nordic-darkBorder">
+      <div className="max-w-7xl mx-auto px-4">
+        <div className="text-center mb-16">
+          <h2 className="text-3xl md:text-5xl font-bold mb-6 text-nordic-text dark:text-white">
+            Se magien i våre nordiske maler
+          </h2>
+          <p className="text-xl text-nordic-muted dark:text-nordic-darkMuted max-w-3xl mx-auto">
+            Fra enkle mobilbilder til profesjonelle studiobilder på sekunder.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {SHOWCASE_IMAGES.map((item) => (
+            <BeforeAfterSlider key={item.id} {...item} />
+          ))}
+        </div>
+      </div>
+    </section>
   </div>
 );
 

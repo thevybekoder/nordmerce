@@ -40,7 +40,6 @@ export default function App() {
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [selectedResolution, setSelectedResolution] = useState<'1K' | '2K' | '4K'>('1K');
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
   const [credits, setCredits] = useState(0);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
@@ -366,7 +365,7 @@ export default function App() {
           base64Image: selectedProduct.base64Data!,
           mimeType: selectedProduct.mimeType || 'image/jpeg',
           prompt: selectedTemplate.promptModifier,
-          resolution: selectedResolution
+          resolution: '1K'
         },
         authToken
       );
@@ -395,7 +394,7 @@ export default function App() {
             product_id: selectedProduct.id,
             template_id: selectedTemplate.id,
             image_url: publicUrl,
-            resolution: selectedResolution
+            resolution: '1K'
         })
         .select()
         .single();
@@ -408,11 +407,25 @@ export default function App() {
         templateId: selectedTemplate.id,
         imageUrl: publicUrl,
         createdAt: genRow.created_at,
-        resolution: selectedResolution
+        resolution: '1K'
       };
 
       setGeneratedImages(prev => [newImage, ...prev]);
-      setCredits(prev => prev - 1); 
+      
+      // Re-fetch credits to ensure UI is in sync with server
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('credits')
+        .eq('id', user.id)
+        .single();
+      
+      if (profileData) {
+        setCredits(profileData.credits);
+      } else {
+        // Fallback if fetch fails
+        setCredits(prev => prev - 1); 
+      }
+
       setActiveTab('gallery');
       addToast("Image generated and saved!", "success");
       
@@ -517,29 +530,6 @@ export default function App() {
                 )}
               </div>
 
-              {/* Resolution Settings */}
-              <div className="bg-white dark:bg-nordic-darkSurface p-6 rounded-xl shadow-card border border-nordic-border dark:border-nordic-darkBorder">
-                 <h3 className="font-semibold mb-4">Output Quality</h3>
-                 <div className="grid grid-cols-3 gap-3">
-                    {(['1K', '2K', '4K'] as const).map((res) => (
-                      <button
-                        key={res}
-                        onClick={() => setSelectedResolution(res)}
-                        className={`py-2 text-sm font-medium rounded-md border transition-all ${
-                          selectedResolution === res 
-                          ? 'border-nordic-accent bg-nordic-accent/5 text-nordic-accent dark:text-white dark:bg-nordic-accent/20' 
-                          : 'border-nordic-border dark:border-nordic-darkBorder hover:border-gray-400 dark:hover:border-gray-500'
-                        }`}
-                      >
-                        {res}
-                      </button>
-                    ))}
-                 </div>
-                 <p className="text-xs text-nordic-muted dark:text-nordic-darkMuted mt-3">
-                   Higher resolutions require more processing credits.
-                 </p>
-              </div>
-
               {/* Action */}
               <Button 
                 size="lg" 
@@ -636,7 +626,35 @@ export default function App() {
                        </div>
                        <button 
                         className="text-nordic-muted hover:text-red-500 transition-colors"
-                        onClick={() => setGeneratedImages(prev => prev.filter(i => i.id !== img.id))}
+                        onClick={async () => {
+                          if (!window.confirm("Are you sure you want to delete this image?")) return;
+                          
+                          try {
+                            // 1. Delete from Database
+                            const { error: dbError } = await supabase
+                              .from('generated_images')
+                              .delete()
+                              .eq('id', img.id);
+                            
+                            if (dbError) throw dbError;
+
+                            // 2. Delete from Storage (Best effort)
+                            // Extract path from URL: .../generated-results/userId/filename.png
+                            const path = img.imageUrl.split('/generated-results/')[1];
+                            if (path) {
+                              await supabase.storage
+                                .from('generated-results')
+                                .remove([path]);
+                            }
+
+                            // 3. Update State
+                            setGeneratedImages(prev => prev.filter(i => i.id !== img.id));
+                            addToast("Image deleted.", "info");
+                          } catch (error: any) {
+                            console.error("Delete failed:", error);
+                            addToast("Failed to delete image.", "error");
+                          }
+                        }}
                        >
                          <Trash2 className="w-4 h-4" />
                        </button>
@@ -677,8 +695,6 @@ export default function App() {
                   </Button>
                 </div>
                 <div className="text-sm text-nordic-muted dark:text-nordic-darkMuted">
-                  <p>Standard generation (1K): 1 credit</p>
-                  <p>High-res generation (4K): 3 credits</p>
                 </div>
               </div>
 
@@ -699,11 +715,10 @@ export default function App() {
   // --- Main View Switcher ---
 
   const renderCurrentView = () => {
-    // 1. Hvis brukeren er logget inn
+    // 1. If user is logged in, ALWAYS show the Dashboard Layout
     if (currentUser) {
-      // Sjekk om brukeren kom fra Pricing og valgte Pro
+      // Check if we need to redirect for Pro plan payment
       if (pendingPlan === 'pro') {
-         // Vis en loading tekst mens vi omdirigerer i useEffect
          return (
           <div className="flex items-center justify-center min-h-screen">
             <div className="text-center">
@@ -714,37 +729,54 @@ export default function App() {
          );
       }
       
-      // Ellers vis vanlig dashboard
-      if (view === 'dashboard' || view === 'landing') return (
+      // Determine what to render in the main content area
+      let content;
+      if (view === 'dashboard' || view === 'landing') {
+        content = renderDashboardContent();
+      } else {
+        // Render global pages inside the dashboard layout
+        switch (view) {
+          case 'features': content = <FeaturesPage />; break;
+          case 'resources': content = <ResourcesPage />; break;
+          case 'pricing': content = <PricingPage onSelectPlan={() => setActiveTab('settings')} onLogin={() => {}} />; break; // Already logged in
+          case 'privacy': content = <LegalPage title="Privacy Policy" />; break;
+          case 'terms': content = <LegalPage title="Terms of Service" />; break;
+          case 'contact': content = <ContactPage />; break;
+          default: content = renderDashboardContent();
+        }
+      }
+      
+      // Persistent Sidebar Layout
+      return (
         <div className="flex flex-col md:flex-row h-[calc(100vh-64px)] overflow-hidden">
             {/* Dashboard Sidebar */}
             <aside className="w-full md:w-64 bg-white dark:bg-nordic-darkSurface border-r border-nordic-border dark:border-nordic-darkBorder flex-shrink-0 z-10 md:h-full overflow-y-auto">
               <div className="p-6">
                 <nav className="space-y-2">
                   <button 
-                    onClick={() => setActiveTab('upload')}
-                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'upload' ? 'bg-nordic-bg dark:bg-nordic-darkClay text-nordic-accent dark:text-white' : 'text-nordic-muted dark:text-nordic-darkMuted hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                    onClick={() => { setView('dashboard'); setActiveTab('upload'); }}
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${view === 'dashboard' && activeTab === 'upload' ? 'bg-nordic-bg dark:bg-nordic-darkClay text-nordic-accent dark:text-white' : 'text-nordic-muted dark:text-nordic-darkMuted hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                   >
                     <Upload className="w-5 h-5" />
                     <span>Uploads</span>
                   </button>
                   <button 
-                    onClick={() => setActiveTab('generate')}
-                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'generate' ? 'bg-nordic-bg dark:bg-nordic-darkClay text-nordic-accent dark:text-white' : 'text-nordic-muted dark:text-nordic-darkMuted hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                    onClick={() => { setView('dashboard'); setActiveTab('generate'); }}
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${view === 'dashboard' && activeTab === 'generate' ? 'bg-nordic-bg dark:bg-nordic-darkClay text-nordic-accent dark:text-white' : 'text-nordic-muted dark:text-nordic-darkMuted hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                   >
                     <ImageIcon className="w-5 h-5" />
                     <span>Generate</span>
                   </button>
                   <button 
-                    onClick={() => setActiveTab('gallery')}
-                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'gallery' ? 'bg-nordic-bg dark:bg-nordic-darkClay text-nordic-accent dark:text-white' : 'text-nordic-muted dark:text-nordic-darkMuted hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                    onClick={() => { setView('dashboard'); setActiveTab('gallery'); }}
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${view === 'dashboard' && activeTab === 'gallery' ? 'bg-nordic-bg dark:bg-nordic-darkClay text-nordic-accent dark:text-white' : 'text-nordic-muted dark:text-nordic-darkMuted hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                   >
                     <Download className="w-5 h-5" />
                     <span>Gallery</span>
                   </button>
                   <button 
-                    onClick={() => setActiveTab('settings')}
-                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'settings' ? 'bg-nordic-bg dark:bg-nordic-darkClay text-nordic-accent dark:text-white' : 'text-nordic-muted dark:text-nordic-darkMuted hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                    onClick={() => { setView('dashboard'); setActiveTab('settings'); }}
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${view === 'dashboard' && activeTab === 'settings' ? 'bg-nordic-bg dark:bg-nordic-darkClay text-nordic-accent dark:text-white' : 'text-nordic-muted dark:text-nordic-darkMuted hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                   >
                     <Settings className="w-5 h-5" />
                     <span>Settings</span>
@@ -753,24 +785,23 @@ export default function App() {
 
                 <div className="mt-12 p-4 bg-nordic-bg dark:bg-nordic-darkClay rounded-lg border border-nordic-border dark:border-nordic-darkBorder">
                   <p className="text-xs font-semibold text-nordic-text dark:text-white mb-2">CREDIT BALANCE</p>
-                  <div className="flex items-baseline space-x-1 mb-3">
+                  <div className="flex items-baseline space-x-1">
                     <span className="text-2xl font-bold text-nordic-accent dark:text-white">{credits}</span>
                     <span className="text-xs text-nordic-muted dark:text-nordic-darkMuted">remaining</span>
                   </div>
-                  <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => { setActiveTab('settings'); }}>Get More</Button>
                 </div>
               </div>
             </aside>
 
             {/* Dashboard Content */}
             <section className="flex-grow overflow-y-auto bg-nordic-bg dark:bg-nordic-darkBg scroll-smooth">
-               {renderDashboardContent()}
+               {content}
             </section>
           </div>
       );
     }
 
-    // 2. Hvis brukeren IKKE er logget inn
+    // 2. If user IS NOT logged in
     switch (view) {
       case 'landing':
         // Landingsside leder nå til Pricing

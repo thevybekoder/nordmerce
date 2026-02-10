@@ -35,38 +35,45 @@ router.post('/', authMiddleware, async (req: AuthedRequest, res) => {
     let imageUrl = '';
     
     try {
-      // Using the unified SDK client structure that was working previously
-      // Refined prompt for product preservation
-      const enhancedPrompt = `Product photography. Use the provided reference image as the primary subject. Keep the product exactly as it looks in the reference. Place it in: ${prompt}. Professional studio lighting, 4k.`;
-
-      const response = await ai.models.generateImages({
-        model: 'imagen-4.0-generate-001',
-        prompt: enhancedPrompt,
-        // Correct parameter for reference image in this SDK version is often 'image' with 'imageBytes'
-        image: base64Image ? {
-          imageBytes: base64Image, 
-        } : undefined,
+      // Using Gemini 3 Pro Image Preview for Subject-Consistent Generation
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-image-preview',
+        contents: [
+          {
+            parts: [
+              { text: `A professional product photograph of the product [1] placed in the following setting: ${prompt}. Ensure the product looks exactly like the reference image. High resolution, 4k.` },
+              { 
+                inlineData: {
+                  mimeType: mimeType || 'image/jpeg',
+                  data: base64Image 
+                }
+              }
+            ]
+          }
+        ],
         config: {
-          numberOfImages: 1,
-          aspectRatio: '1:1',
-          safetyFilterLevel: 'BLOCK_LOW_AND_ABOVE',
-          personGeneration: 'ALLOW_ADULT', 
+          responseModalities: ['IMAGE'],
+          safetySettings: [
+            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
+            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
+            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
+            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' }
+          ]
         }
       });
 
-      // Handle the response bytes correctly
-      const generatedImageBytes = response.generatedImages?.[0]?.image?.imageBytes;
+      // Extract the generated image from the content parts
+      // The structure is usually candidates[0].content.parts[0].inlineData (or similar for image responses)
+      const candidate = response.candidates?.[0];
+      const part = candidate?.content?.parts?.[0];
       
-      if (!generatedImageBytes) {
-        throw new Error("No image data received from the AI service.");
+      if (!part || !part.inlineData || !part.inlineData.data) {
+        console.error("Unexpected AI Response Structure:", JSON.stringify(response, null, 2));
+        throw new Error("No image data received from Gemini.");
       }
-      
-      // If bytes are returned as a Buffer or Uint8Array, convert to base64
-      const base64Content = typeof generatedImageBytes === 'string' 
-        ? generatedImageBytes 
-        : Buffer.from(generatedImageBytes).toString('base64');
 
-      imageUrl = `data:image/png;base64,${base64Content}`;
+      // The SDK usually returns 'data' as the base64 string
+      imageUrl = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
 
     } catch (aiError: any) {
       console.error("AI Generation Error:", aiError.message);
