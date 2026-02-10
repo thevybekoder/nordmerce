@@ -45,8 +45,13 @@ router.post('/checkout', json(), authMiddleware, async (req: AuthedRequest, res)
 router.post('/subscribe', json(), authMiddleware, async (req: AuthedRequest, res) => {
   try {
     const userId = req.user!.userId;
-    // Hent brukerens e-post fra requesten (valgfritt, men bra for Stripe)
     const userEmail = req.user!.email; 
+    
+    const priceId = process.env.STRIPE_PRO_PRICE_ID;
+    if (!priceId) {
+      throw new Error("STRIPE_PRO_PRICE_ID is not configured.");
+    }
+
     const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('is_pro')
@@ -56,20 +61,11 @@ router.post('/subscribe', json(), authMiddleware, async (req: AuthedRequest, res
     if (profile?.is_pro) {
       return res.status(400).json({ error: 'Du har allerede et Pro-abonnement.' });
     }
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [{
-        price_data: {
-          currency: 'nok',
-          product_data: { 
-            name: 'Nordic Studio Pro',
-            description: 'Månedlig abonnement med ubegrenset generering (Fair use)'
-          },
-          unit_amount: 19900, // 199.00 NOK (øre)
-          recurring: {
-            interval: 'month',
-          },
-        },
+        price: priceId, // Bruker Price ID fra dashboard istedenfor hardkodet beløp
         quantity: 1,
       }],
       mode: 'subscription',
@@ -87,13 +83,15 @@ router.post('/subscribe', json(), authMiddleware, async (req: AuthedRequest, res
 });
 
 // 3. WEBHOOK (Håndterer at betalingen gikk gjennom)
-router.post('/webhook', raw({ type: 'application/json' }), async (req, res) => {
+router.post('/webhook', async (req: any, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
 
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig!, process.env.STRIPE_WEBHOOK_SECRET!);
+    // Vi bruker req.rawBody som ble fanget opp i app.ts
+    event = stripe.webhooks.constructEvent(req.rawBody, sig!, process.env.STRIPE_WEBHOOK_SECRET!);
   } catch (err: any) {
+    console.error("Webhook verification failed:", err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 

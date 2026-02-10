@@ -17,8 +17,22 @@ router.post('/', authMiddleware, async (req: AuthedRequest, res) => {
   const userId = req.user!.userId;
   const { prompt, base64Image, mimeType } = req.body;
 
+  // Input Validation
+  if (!prompt || typeof prompt !== 'string' || prompt.length > 1000) {
+    return res.status(400).json({ error: 'Invalid prompt. Must be a string under 1000 chars.' });
+  }
+
+  if (base64Image && typeof base64Image !== 'string') {
+    return res.status(400).json({ error: 'Invalid image data.' });
+  }
+
+  if (base64Image && (!mimeType || !['image/jpeg', 'image/png', 'image/webp'].includes(mimeType))) {
+    return res.status(400).json({ error: 'Invalid or missing mimeType. Supported: jpeg, png, webp.' });
+  }
+
   try {
-    // 1. Check Credit Balance
+    // 1. Atomic Check & Deduct (Optimistic)
+    // We check balance first to provide a clear error message
     const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('credits')
@@ -27,6 +41,17 @@ router.post('/', authMiddleware, async (req: AuthedRequest, res) => {
 
     if (!profile || profile.credits < 1) {
       return res.status(403).json({ error: 'Insufficient credits. Please top up.' });
+    }
+
+    // Deduct credit immediately to prevent race conditions
+    const { error: deductError } = await supabaseAdmin.rpc('increment_credits', { 
+      user_id: userId, 
+      amount: -1 
+    });
+
+    if (deductError) {
+      console.error("Failed to deduct credit:", deductError);
+      return res.status(500).json({ error: 'Transaction failed' });
     }
 
     // 2. Generate Image with Imagen 4 (Subject-driven)
@@ -77,17 +102,15 @@ router.post('/', authMiddleware, async (req: AuthedRequest, res) => {
 
     } catch (aiError: any) {
       console.error("AI Generation Error:", aiError.message);
-      return res.status(500).json({ error: `Generation failed: ${aiError.message}` });
-    }
+      
+      // REFUND: If generation failed, refund the credit
+      console.log("Refunding credit to user:", userId);
+      await supabaseAdmin.rpc('increment_credits', { 
+        user_id: userId, 
+        amount: 1 
+      });
 
-    // 3. Deduct Credit
-    const { error: rpcError } = await supabaseAdmin.rpc('increment_credits', { 
-      user_id: userId, 
-      amount: -1 
-    });
-    
-    if (rpcError) {
-      console.error("Failed to deduct credit after generation:", rpcError);
+      return res.status(500).json({ error: `Generation failed: ${aiError.message}` });
     }
 
     res.json({ imageUrl });

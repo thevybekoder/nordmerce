@@ -46,7 +46,13 @@ to authenticated
 using (auth.uid() = user_id);
 
 -- 5. Storage Policies (Ensure buckets 'user-uploads' and 'generated-results' exist)
--- Use 'to authenticated' and check the folder name against user ID
+-- CRITICAL: The frontend MUST upload files to a folder named after the user's UUID.
+-- Example path: `user-uploads/{user_id}/image.png`
+-- The policy checks if the first folder name matches the authenticated user's ID.
+
+drop policy if exists "Users can download own files" on storage.objects;
+drop policy if exists "Users can upload own files" on storage.objects;
+drop policy if exists "Users can delete own files" on storage.objects;
 
 -- SELECT (Download)
 create policy "Users can download own files"

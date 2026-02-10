@@ -9,14 +9,24 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-app.use(cors());
+app.use(cors({
+  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+  credentials: true
+}));
 
 // VIKTIG: Billing MÅ komme før json-parseren, fordi Stripe trenger "rå" data
-app.use('/api/billing', billingRouter);
-
-// HER ER ENDRINGEN: Vi tillater nå opptil 50mb (nok til store bilder)
-app.use(express.json({ limit: '50mb' }));
+// Men vi forbedrer dette ved å lagre rawBody i json-parseren for spesifikke ruter
+app.use(express.json({ 
+  limit: '50mb',
+  verify: (req: any, res, buf) => {
+    if (req.originalUrl.includes('/api/billing/webhook')) {
+      req.rawBody = buf;
+    }
+  }
+}));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+app.use('/api/billing', billingRouter);
 
 // Routes
 app.use('/api/generate', generateRouter);
