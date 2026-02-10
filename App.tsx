@@ -4,7 +4,7 @@ import { Button } from './components/Button';
 import { ViewState, DashboardTab, Product, GeneratedImage, Template } from './types';
 import { TEMPLATES } from './constants';
 import { generateImageViaApi } from './services/geminiService';
-import { AuthUser } from './services/authService'; 
+import { AuthUser, signOut as signOutService } from './services/authService'; 
 import { createCheckoutSession } from './services/billingService';
 import { supabase } from './src/supabaseClient';
 import { ToastContainer, ToastMessage, ToastType } from './components/Toast';
@@ -14,7 +14,7 @@ import {
   LandingPage, 
   PricingPage, 
   FeaturesPage, 
-  ResourcesPage, 
+  FAQPage, 
   LegalPage,
   ContactPage
 } from './components/StaticPages';
@@ -42,6 +42,7 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
   const [credits, setCredits] = useState(0);
+  const [isPro, setIsPro] = useState(false);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   
   // Toast State
@@ -120,14 +121,17 @@ export default function App() {
     setAuthToken(session.access_token);
     setCurrentUser({ id: session.user.id, email: session.user.email });
   
-    // Fetch user profile credits
+    // Fetch user profile credits and pro status
     const { data: profileData } = await supabase
       .from('profiles')
-      .select('credits')
+      .select('credits, is_pro')
       .eq('id', session.user.id)
       .single();
   
-    if (profileData) setCredits(profileData.credits);
+    if (profileData) {
+      setCredits(profileData.credits);
+      setIsPro(profileData.is_pro);
+    }
 
     // Fetch Products
     const { data: productsData } = await supabase
@@ -176,7 +180,7 @@ export default function App() {
   const handleSubscribe = async () => {
     if (!authToken) return;
     try {
-      const res = await fetch(`${(import.meta as any).env.VITE_API_BASE_URL || 'http://localhost:4000'}/api/billing/subscribe`, {
+      const res = await fetch(`${(import.meta as any).env.VITE_API_BASE_URL || 'http://localhost:4000'}/api/billing/create-checkout-session`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -184,9 +188,55 @@ export default function App() {
         },
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Subscription failed');
       if (data.url) window.location.href = data.url;
-    } catch (err) {
-      alert("Kunne ikke starte abonnement.");
+    } catch (err: any) {
+      addToast(err.message, "error");
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    if (!authToken) return;
+    if (!window.confirm("Are you sure you want to cancel your subscription?")) return;
+
+    try {
+      const res = await fetch(`${(import.meta as any).env.VITE_API_BASE_URL || 'http://localhost:4000'}/api/billing/cancel-subscription`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Cancellation failed');
+      
+      setIsPro(false);
+      addToast("Subscription will end at the period's conclusion.", "success");
+    } catch (err: any) {
+      addToast(err.message, "error");
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!authToken) return;
+    const confirmation = window.prompt("Type 'DELETE' to confirm account deletion. This action cannot be undone.");
+    if (confirmation !== 'DELETE') return;
+
+    try {
+      const res = await fetch(`${(import.meta as any).env.VITE_API_BASE_URL || 'http://localhost:4000'}/api/user/delete-account`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Deletion failed');
+      
+      await handleLogout();
+      addToast("Account deleted successfully.", "info");
+    } catch (err: any) {
+      addToast(err.message, "error");
     }
   };
 
@@ -222,20 +272,25 @@ export default function App() {
         }
       }
     } catch (err: any) {
-      setAuthError(err.message);
-      addToast(err.message, "error");
+      let friendlyMessage = err.message;
+      if (err.message === 'User already registered') {
+        friendlyMessage = 'Email already in use. Please sign in instead.';
+      }
+      setAuthError(friendlyMessage);
+      addToast(friendlyMessage, "error");
     } finally {
       setIsAuthLoading(false);
     }
   };
 
   const handleLogout = async () => {
+    await signOutService();
     await supabase.auth.signOut();
     setView('landing');
     setPendingPlan(null);
     setProducts([]);
     setGeneratedImages([]);
-    addToast("Logged out successfully", "info");
+    addToast("Signed out successfully", "info");
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -681,18 +736,20 @@ export default function App() {
                     <p className="text-sm font-medium">Available Credits</p>
                     <p className="text-2xl font-bold text-nordic-accent dark:text-white">{credits}</p>
                   </div>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => {
-                      if (!authToken) return;
-                      createCheckoutSession(authToken, 10).catch((err) =>
-                        alert(err.message || 'Failed to start checkout')
-                      );
-                    }}
-                  >
-                    Buy credits
-                  </Button>
+                  <div className="flex flex-col space-y-2">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => {
+                        if (!authToken) return;
+                        createCheckoutSession(authToken, 10).catch((err) =>
+                          alert(err.message || 'Failed to start checkout')
+                        );
+                      }}
+                    >
+                      Buy credits
+                    </Button>
+                  </div>
                 </div>
                 <div className="text-sm text-nordic-muted dark:text-nordic-darkMuted">
                 </div>
@@ -700,10 +757,30 @@ export default function App() {
 
               <div className="bg-white dark:bg-nordic-darkSurface rounded-xl shadow-card p-6 border border-nordic-border dark:border-nordic-darkBorder">
                 <h3 className="text-lg font-medium mb-4">Account</h3>
-                <p className="text-sm text-nordic-muted dark:text-nordic-darkMuted mb-4">
-                  {currentUser ? `Logged in as ${currentUser.email}` : 'Not logged in'}
+                <p className="text-sm text-nordic-muted dark:text-nordic-darkMuted mb-6">
+                  {currentUser ? `Logged in as ${currentUser.email}` : 'Not signed in'}
                 </p>
-                <Button variant="outline" size="sm" onClick={handleLogout}>Sign Out</Button>
+                <div className="space-y-4">
+                  <Button variant="outline" size="sm" className="w-full justify-center" onClick={handleLogout}>
+                    Sign Out
+                  </Button>
+                  
+                  {isPro && (
+                    <button 
+                      onClick={handleCancelSubscription}
+                      className="w-full text-sm font-medium text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/30 px-4 py-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                    >
+                      Cancel subscription
+                    </button>
+                  )}
+
+                  <button 
+                    className="w-full text-sm font-medium text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/30 px-4 py-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                    onClick={handleDeleteAccount}
+                  >
+                    Delete account
+                  </button>
+                </div>
               </div>
             </div>
           );
@@ -737,8 +814,15 @@ export default function App() {
         // Render global pages inside the dashboard layout
         switch (view) {
           case 'features': content = <FeaturesPage />; break;
-          case 'resources': content = <ResourcesPage />; break;
-          case 'pricing': content = <PricingPage onSelectPlan={() => setActiveTab('settings')} onLogin={() => {}} />; break; // Already logged in
+          case 'faq': content = <FAQPage />; break;
+          case 'pricing': content = <PricingPage 
+            onSelectPlan={(plan) => plan === 'pro' ? handleSubscribe() : setActiveTab('settings')} 
+            onLogin={() => {}} 
+            onCancelSubscription={handleCancelSubscription}
+            isPro={isPro}
+            isAuthenticated={!!currentUser}
+            userEmail={currentUser?.email}
+          />; break; 
           case 'privacy': content = <LegalPage title="Privacy Policy" />; break;
           case 'terms': content = <LegalPage title="Terms of Service" />; break;
           case 'contact': content = <ContactPage />; break;
@@ -828,6 +912,8 @@ export default function App() {
               setAuthMode('login');
               setView('auth' as ViewState);
             }}
+            isPro={false}
+            isAuthenticated={false}
           />
         );
 
@@ -837,7 +923,7 @@ export default function App() {
             <h1 className="text-3xl font-bold mb-6">
               {pendingPlan ? `Finish setup for ${pendingPlan}` : 'Welcome Back'}
             </h1>
-            <p className="text-nordic-muted mb-6">Create an account to continue.</p>
+            <p className="text-nordic-muted mb-6">Sign in or create an account to continue.</p>
             
             <form
               onSubmit={handleAuthSubmit}
@@ -853,7 +939,7 @@ export default function App() {
                   }`}
                   onClick={() => setAuthMode('login')}
                 >
-                  Log in
+                  Sign in
                 </button>
                 <button
                   type="button"
@@ -895,14 +981,14 @@ export default function App() {
                 className="w-full mt-2"
                 isLoading={isAuthLoading}
               >
-                {authMode === 'login' ? 'Log in' : 'Create account & Continue'}
+                {authMode === 'login' ? 'Sign in' : 'Create account & Continue'}
               </Button>
             </form>
           </div>
         );
 
       case 'features': return <FeaturesPage />;
-      case 'resources': return <ResourcesPage />;
+      case 'faq': return <FAQPage />;
       case 'privacy': return <LegalPage title="Privacy Policy" />;
       case 'terms': return <LegalPage title="Terms of Service" />;
       case 'contact': return <ContactPage />;
@@ -917,6 +1003,8 @@ export default function App() {
       isDarkMode={isDarkMode} 
       toggleTheme={toggleTheme}
       isAuthenticated={!!currentUser}
+      onLogin={() => setView('auth' as ViewState)}
+      onLogout={handleLogout}
     >
       {renderCurrentView()}
       

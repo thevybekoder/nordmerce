@@ -9,16 +9,18 @@ interface LayoutProps {
   isDarkMode: boolean;
   toggleTheme: () => void;
   isAuthenticated: boolean;
+  onLogin: () => void;
+  onLogout: () => void;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, view, setView, isDarkMode, toggleTheme, isAuthenticated }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, view, setView, isDarkMode, toggleTheme, isAuthenticated, onLogin, onLogout }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   const navLinks: { label: string; value: ViewState }[] = [
     { label: 'Features', value: 'features' },
     { label: 'Pricing', value: 'pricing' },
-    { label: 'Resources', value: 'resources' },
-  ].filter(link => !(link.value === 'pricing' && isAuthenticated));
+    { label: 'FAQ', value: 'faq' },
+  ];
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-nordic-bg text-nordic-text dark:bg-nordic-darkBg dark:text-nordic-darkText transition-colors duration-300">
@@ -56,7 +58,12 @@ export const Layout: React.FC<LayoutProps> = ({ children, view, setView, isDarkM
               {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
 
-            {/* Auth buttons now handled in App landing view; keep header simple navigation */}
+            <button 
+              onClick={isAuthenticated ? onLogout : onLogin}
+              className="hidden md:block text-sm font-medium px-4 py-2 rounded-lg border border-nordic-border dark:border-nordic-darkBorder hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            >
+              {isAuthenticated ? 'Sign Out' : 'Sign In'}
+            </button>
 
             {/* Mobile Menu Button */}
             <button 
@@ -81,10 +88,13 @@ export const Layout: React.FC<LayoutProps> = ({ children, view, setView, isDarkM
               </button>
             ))}
             <button 
-              onClick={() => { setView('dashboard'); setIsMobileMenuOpen(false); }}
-              className="text-left text-sm font-medium text-nordic-accent dark:text-white py-2"
+              onClick={() => { 
+                if (isAuthenticated) onLogout(); else onLogin();
+                setIsMobileMenuOpen(false); 
+              }}
+              className="text-left text-sm font-medium text-nordic-accent dark:text-white py-2 border-t border-nordic-border dark:border-nordic-darkBorder pt-4"
             >
-              Log in / Sign up
+              {isAuthenticated ? 'Sign Out' : 'Sign In'}
             </button>
           </div>
         )}
@@ -101,6 +111,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, view, setView, isDarkM
           <div className="flex space-x-6 mt-4 md:mt-0">
             <button onClick={() => setView('privacy')} className="hover:text-nordic-text dark:hover:text-white">Privacy Policy</button>
             <button onClick={() => setView('terms')} className="hover:text-nordic-text dark:hover:text-white">Terms of Service</button>
+            <button onClick={() => setView('faq')} className="hover:text-nordic-text dark:hover:text-white">FAQ</button>
             <button onClick={() => setView('contact')} className="hover:text-nordic-text dark:hover:text-white">Contact</button>
           </div>
         </div>

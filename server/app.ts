@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { generateRouter } from './routes/generate';
 import { billingRouter } from './routes/billing';
+import { userRouter } from './routes/user';
 
 dotenv.config();
 
@@ -27,6 +28,7 @@ app.use(express.json({
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 app.use('/api/billing', billingRouter);
+app.use('/api/user', userRouter);
 
 // Routes
 app.use('/api/generate', generateRouter);

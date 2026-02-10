@@ -27,7 +27,7 @@ export interface GeneratedImage {
   resolution: '1K' | '2K' | '4K';
 }
 
-export type ViewState = 'landing' | 'dashboard' | 'features' | 'pricing' | 'resources' | 'privacy' | 'terms' | 'auth' | 'contact';
+export type ViewState = 'landing' | 'dashboard' | 'features' | 'pricing' | 'faq' | 'privacy' | 'terms' | 'auth' | 'contact';
 export type DashboardTab = 'upload' | 'generate' | 'gallery' | 'settings';
 
 export interface User {

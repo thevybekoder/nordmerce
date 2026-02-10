@@ -41,17 +41,19 @@ router.post('/checkout', json(), authMiddleware, async (req: AuthedRequest, res)
   }
 });
 
-// 2. ABONNEMENT (Månedlig trekk - 199kr)
-router.post('/subscribe', json(), authMiddleware, async (req: AuthedRequest, res) => {
+// 2. ABONNEMENT (Månedlig trekk)
+router.post('/create-checkout-session', json(), authMiddleware, async (req: AuthedRequest, res) => {
   try {
     const userId = req.user!.userId;
     const userEmail = req.user!.email; 
+    const { priceId: bodyPriceId } = req.body || {};
     
-    const priceId = process.env.STRIPE_PRO_PRICE_ID;
+    const priceId = bodyPriceId || process.env.STRIPE_PRO_PRICE_ID;
     if (!priceId) {
-      throw new Error("STRIPE_PRO_PRICE_ID is not configured.");
+      return res.status(400).json({ error: "No Price ID provided." });
     }
 
+    // 1. Check if user is already a Pro member
     const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('is_pro')
@@ -59,13 +61,14 @@ router.post('/subscribe', json(), authMiddleware, async (req: AuthedRequest, res
       .single();
 
     if (profile?.is_pro) {
-      return res.status(400).json({ error: 'Du har allerede et Pro-abonnement.' });
+      return res.status(400).json({ error: 'You are already a Pro member.' });
     }
 
+    // 2. Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [{
-        price: priceId, // Bruker Price ID fra dashboard istedenfor hardkodet beløp
+        price: priceId,
         quantity: 1,
       }],
       mode: 'subscription',
@@ -78,6 +81,56 @@ router.post('/subscribe', json(), authMiddleware, async (req: AuthedRequest, res
     res.json({ url: session.url });
   } catch (error: any) {
     console.error("Stripe error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 2b. AVSLUTT ABONNEMENT
+router.post('/cancel-subscription', authMiddleware, async (req: AuthedRequest, res) => {
+  try {
+    const userEmail = req.user!.email;
+    const userId = req.user!.userId;
+
+    if (!userEmail) {
+      return res.status(400).json({ error: 'User email not found' });
+    }
+
+    // 1. Find Stripe Customer
+    const customers = await stripe.customers.list({ email: userEmail, limit: 1 });
+    if (customers.data.length === 0) {
+      return res.status(404).json({ error: 'Stripe customer not found' });
+    }
+    const customer = customers.data[0];
+
+    // 2. Find Active Subscription
+    const subscriptions = await stripe.subscriptions.list({ 
+      customer: customer.id, 
+      status: 'active',
+      limit: 1 
+    });
+
+    if (subscriptions.data.length === 0) {
+      // Fallback: Check for trialing or strictly check DB
+      // If no stripe sub exists but DB says is_pro, we just update DB
+      console.warn("No active Stripe subscription found for user, but forcefully removing Pro status.");
+    } else {
+      // 3. Cancel at period end
+      const subId = subscriptions.data[0].id;
+      await stripe.subscriptions.update(subId, { cancel_at_period_end: true });
+    }
+
+    // 4. Update Supabase (Revoke Pro immediately per instruction)
+    const { error: dbError } = await supabaseAdmin
+      .from('profiles')
+      .update({ is_pro: false })
+      .eq('id', userId);
+
+    if (dbError) throw dbError;
+
+    res.json({ success: true, message: 'Subscription cancelled successfully' });
+
+  } catch (error: any) {
+    console.error("Cancel error:", error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -36,4 +36,10 @@ export function login(email: string, password: string) {
   return authRequest('login', { email, password });
 }
 
+export function signOut() {
+  // Logic is handled via Supabase client in App.tsx, 
+  // but we provide this export for architectural consistency.
+  return Promise.resolve();
+}
+
 
